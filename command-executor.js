@@ -20,7 +20,11 @@ class TransactionalCommandExecutor {
 
   constructor ( pgClient, commands = [], opts = {} ) {
     
+    assert.ok(Array.isArray(commands), 'the commands argument must be an array')
+
     this.pgClient = pgClient
+    this.name = opts.name
+    this.purpose = opts.purpose
     this.submittedCommands = []
     this.executableCommands = []
     this.commandNames = {}
@@ -28,6 +32,8 @@ class TransactionalCommandExecutor {
     this.genId = opts.genId || (() => {
       return ulid()
     })
+
+    
 
   }
 
@@ -147,7 +153,7 @@ class TransactionalCommandExecutor {
               }
             }
           }
-        }
+        } 
       })
 
       this.executableCommands.push( executableCommand )
@@ -267,18 +273,23 @@ class TransactionalCommandExecutor {
       await this.commitTransaction( ) 
 
     } catch ( err ) {
-
+    
       currentContext.results[idx].status = 'exception'
       currentContext.results[idx].error = err
+      currentContext.lastOp = currentContext.results[idx]
       await this.rollbackTransaction( )
 
-    } finally {
-      
-      //await this.finalizeTransaction()
+    } 
 
+    if ( opts.output === 'fullcontext' ) {
+      return currentContext
     }
+    else if ( opts.output === 'allresults' ) {
+      return { transactionId: currentContext.transactionId, results : currentContext.results }
+    } 
 
-    return currentContext
+    return { transactionId: currentContext.transactionId, lastOp : currentContext.lastOp }
+    
 
   }
 
