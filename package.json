@@ -5,6 +5,11 @@
   "description": "Execute Postgresql Queries over HTTPS",
   "main": "index.js",
   "scripts": {
+    "sample1" : "node ./examples/01.create-table.js",
+    "sample2" : "node ./examples/02.simple-insert.js",
+    "sample3" : "node ./examples/03.simple-insert-failure.js",
+    "sample4" : "node ./examples/04.fetch-all.js",
+    "sample5" : "node ./examples/05.fetch-validate-update.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

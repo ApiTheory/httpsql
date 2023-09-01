@@ -1,14 +1,55 @@
 # httpsql samples
 
-This folder has a number of examples that can help provide a feel for where we are trying to go with httpsql.
+This folder has a number of examples that can help provide a feel for httpsql.
+
+## Setup
+
+Each file expects the following environment variables to be set in order to connect to your postgres database:
+
+- HOST
+- DATABASE
+- USER
+- PWD
+
+We suggest using a .env file in the root of the project to drive these values.  A .env.sample has been provided in the examples directory.
+
+## Running Examples
+
+Each example can be executed directly via node:
+
+```
+node ./01.create-table.js
+```
+
+Script commands have also been setup in the package so *npm run* can execute :
+
+```
+npm run sample1
+```
 
 ## Files
 
-### create-table-insert-then-retrieve
+### 01.create-table.js
 
-The sample runs 4 separate transactions:
+Drops a projects table if it exists and then creates it again.  Run this file first to get started and can be run before and after each sample in order to start fresh.
 
-- create a table
-- insert a record
-- insert a record with the same ID to see if an exception is thrown with postgres info
-- select the record by its inserted id, run a logic block to make sure the status for the project is not frozen, then update the project with a new name.
+### 02.simple-insert.js
+
+Demonstrates a simple project insert with returned data and an expectation that only one row gets created.
+
+### 03.simple-insert-failure.js
+
+Creates a project and then attempts to create another project with the same ID and fails.  Demonstrate failure handling at the database level as well as the use to {variable:...} and {lastop:...} dynamic parameters.
+
+### 04.fetch-all.js
+
+Does a simple fetch of all rows in the projects table.  Use after each example to see the state of the projects table.
+
+### 05.fetch-validate-update.js
+
+Creates a project, attempts to fetch it by name, validates a specific status value, then updates the record with a new status value.  Demonstrates the use of a logic operation (logicOp) to drive future commands.
+
+
+
+
+
