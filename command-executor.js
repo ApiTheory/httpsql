@@ -4,7 +4,8 @@ import { LogicEngine } from 'json-logic-engine'
 import { ulid } from 'ulidx'
 import dotty from 'dotty'
 const logicEngine = new LogicEngine()
-const varMatchRegex = /^{([a-zA-Z0-9\.]*)}$/gm;
+const varMatchRegex = /^{([a-zA-Z0-9:\.]*)}$/gm;
+const lastOpMatchRegex = /^{(lastop|results+):([a-zA-Z0-9\.]*)}$/gmi;
 
 function getMatches(string, regex, index) {
   index || (index = 1); // default to the first capturing group
@@ -28,6 +29,7 @@ class TransactionalCommandExecutor {
     this.submittedCommands = []
     this.executableCommands = []
     this.commandNames = {}
+    this.transactionExecuted = false
     this.transactionState = 'not-started'
     this.genId = opts.genId || (() => {
       return ulid()
@@ -56,6 +58,11 @@ class TransactionalCommandExecutor {
       throw new Error(`unknown command type: can not have both 'sql' and 'opEval' parameters in the command`)
     }
 
+    // make sure to set strict to true unless its false
+    if ( command.strict === undefined || command.strict === null ) command.strict = true
+
+    command.params = command.params || []
+
     this.submittedCommands.push( command )
     
   }
@@ -78,7 +85,7 @@ class TransactionalCommandExecutor {
 
   async rollbackTransaction ( ) {
 
-    if ( this.transactionState === 'transact-begin-complete' ) {
+    if (["transact-begin-complete"].includes(this.transactionState) ) {
 
       this.transactionState = 'transact-rollback-start'
       await this.pgClient.query( 'ROLLBACK' )
@@ -86,7 +93,7 @@ class TransactionalCommandExecutor {
 
     } else {
 
-      throw new Error(`the transaction can not be started because its state = '${this.transactionState}'`)
+      throw new Error(`the transaction can not be rolled back because its state = '${this.transactionState}'`)
 
     }
 
@@ -126,31 +133,53 @@ class TransactionalCommandExecutor {
   
   async executeTransaction ( variables = {}, opts = {} ) {
 
+    if ( this.transactionExecuted ) {
+      throw new Error( 'The command executor object can only call this method one time; create a new object in order to execute a new transaction. ')
+    }
+
+    this.transactionExecuted = true
+
     // prepopulate the results
     const results = []
     this.submittedCommands.map( ( command, idx) => {
 
-      const executableCommand = { ...command }
+      const executableCommand = structuredClone( command )
       executableCommand.id = executableCommand.id || this.genId()
       // if sql command, walk the params and any that are dynamic need to be compared to the incomming variables and replaced
       // if command.strict = true and the variable can't be found, an error is thrown.  If the command is not strict, then a null will be put into its place
       // we want to do this before starting the transaction so we can short circuit any potential errors
       command.params?.forEach( function ( param, pidx) {
-        
+
         // see if this is a variable substitution
         if ( param.startsWith('{') && param.endsWith('}')) {
+          
           const dynamicField = getMatches( param, varMatchRegex ) 
+
           if ( dynamicField ) {
-            const subVal = dotty.get( variables, dynamicField[0])
-            if ( subVal !== undefined ) {
-              executableCommand.params[pidx] = subVal
+
+            // see if its being defined by a prefix or variable or lastop
+            const prefixSplit = dynamicField[0].split(':')
+ 
+            if ( prefixSplit.length === 2 && prefixSplit[0].toLowerCase()==='lastop') {
+
+              // if its a lastop, the value has to be determined at the time of execution, 
+              // so don't do anything here other than assign back and it will be retried
+              executableCommand.params[pidx] = param
+
             } else {
-              // if interpretation is strict, then throw error, otherwise put a null
-              if ( command.strict ) {
-                throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
+              const varName = prefixSplit[prefixSplit.length-1]
+              const subVal = dotty.get( variables, varName )
+              if ( subVal !== undefined ) {
+                executableCommand.params[pidx] = subVal
               } else {
-                executableCommand.params[pidx] = null
+                // if interpretation is strict, then throw error, otherwise put a null
+                if ( command.strict ) {
+                  throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
+                } else {
+                  executableCommand.params[pidx] = null
+                }
               }
+
             }
           }
         } 
@@ -181,6 +210,35 @@ class TransactionalCommandExecutor {
 
       for ( idx=0; idx < currentContext.executableCommands.length; idx++ ) {
     
+        // walk the params one more time for potential lastop replacements
+        currentContext.executableCommands[idx].params.forEach( function ( param, pidx) {
+          
+          if ( param.startsWith('{') && param.endsWith('}')) {
+          
+            const dynamicLastOpField = lastOpMatchRegex.exec( param ) 
+  
+            if ( dynamicLastOpField ) {
+
+              const [ _, type, varname ] = dynamicLastOpField
+            
+              const subVal = dotty.get( type === 'lastop' ? currentContext.lastOp : currentContext.results, varname )
+              if ( subVal !== undefined ) {
+                currentContext.executableCommands[idx].params[pidx] = subVal
+              } else {
+                // if interpretation is strict, then throw error, otherwise put a null
+                if ( currentContext.executableCommands[idx].strict ) {
+                  throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
+                } else {
+                  currentContext.executableCommands[idx].params[pidx] = null
+                }
+              }
+
+            }
+
+          }
+
+        })
+
         const command = currentContext.executableCommands[idx]
         
         if ( command.sql ) {
@@ -274,8 +332,11 @@ class TransactionalCommandExecutor {
 
     } catch ( err ) {
     
-      currentContext.results[idx].status = 'exception'
-      currentContext.results[idx].error = err
+
+      currentContext.results[idx] = {
+        status : 'exception',
+        error : err
+      }
       currentContext.lastOp = currentContext.results[idx]
       await this.rollbackTransaction( )
 
