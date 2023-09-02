@@ -71,7 +71,7 @@ The goal is to get a project by it's id, test that is exists and is in the corre
   {
     "name" : "check-if-completed",
     "purpose" : "only proceed if status is completed",
-    "opEval": {"===" : ["complete", {"var" : "lastOp.rows.0.status"}]}
+    "logicOp": {"===" : ["complete", {"var" : "lastOp.rows.0.status"}]}
   },
   {
      "name" : "update-project",
@@ -108,4 +108,3 @@ Thanks to the following open source projects:
 
 JSON Logic Engine: https://www.npmjs.com/package/json-logic-engine
 This library drives our logicOp blocks.
-

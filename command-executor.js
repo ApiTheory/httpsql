@@ -3,7 +3,18 @@ import * as assert from 'assert';
 import { LogicEngine } from 'json-logic-engine'
 import { ulid } from 'ulidx'
 import dotty from 'dotty'
+import * as fs from 'fs'
+import Ajv from 'ajv'
+import { CommandValidationError } from './errors.js';
+
 const logicEngine = new LogicEngine()
+
+const ajv = new Ajv({ allErrors: true })
+const sqlCommandValidationShema = JSON.parse(fs.readFileSync('./json-schemas/sql-command-schema.json'))
+const logicOpCommandValidationShema = JSON.parse(fs.readFileSync('./json-schemas/logicop-command-schema.json'))
+const sqlCommandValidator = ajv.compile( sqlCommandValidationShema )
+const logicOpCommandValidator = ajv.compile( logicOpCommandValidationShema )
+
 const varMatchRegex = /^{([a-zA-Z0-9:\.]*)}$/gm;
 const lastOpMatchRegex = /^{(lastop|results+):([a-zA-Z0-9\.]*)}$/gmi;
 
@@ -35,8 +46,6 @@ class TransactionalCommandExecutor {
       return ulid()
     })
 
-    
-
   }
 
   addCommand( command ) {
@@ -50,18 +59,43 @@ class TransactionalCommandExecutor {
       this.commandNames[command.name] = this.submittedCommands.length
     }
 
-    if ( !command.sql && !command.opEval ) {
-      throw new Error(`unknown command type: must have either a 'sql' or 'opEval' parameter in the command`)
+    if ( !command.sql && !command.logicOp ) {
+      const errors = [
+        { 
+          keyword: 'missingOneOfProperties',
+          message: `unknown command type: must have either a 'sql' or 'logicOp' parameter in the command`
+        }
+      ]
+      throw new CommandValidationError( 'the command object can not be validated',  errors )  
     }
 
-    if ( command.sql && command.opEval ) {
-      throw new Error(`unknown command type: can not have both 'sql' and 'opEval' parameters in the command`)
+    if ( command.sql && command.logicOp ) {
+      const errors = [
+        { 
+          keyword: 'clashingProperties',
+          message: `unknown command type: can not have both 'sql' and 'logicOp' parameters in the command`
+        }
+      ]
+      throw new CommandValidationError( 'the command object can not be validated',  errors )  
     }
 
     // make sure to set strict to true unless its false
     if ( command.strict === undefined || command.strict === null ) command.strict = true
 
+    // user does not have to pass params, but we must have an array
     command.params = command.params || []
+
+    if ( command.sql ) {
+      const validCommand = sqlCommandValidator( command )
+      if (!validCommand) { 
+        throw new CommandValidationError( 'the command object can not be validated',  sqlCommandValidator.errors )  
+      }
+    } else if ( command.logicOp ) {
+      const validCommand = logicOpCommandValidator( command )
+      if (!validCommand) { 
+        throw new CommandValidationError( 'the command object can not be validated',  logicOpCommandValidator.errors )  
+      }
+    }
 
     this.submittedCommands.push( command )
     
@@ -291,19 +325,19 @@ class TransactionalCommandExecutor {
 
           }
 
-        } else if ( command.opEval ) {
+        } else if ( command.logicOp ) {
 
-          if( logicEngine.run( command.opEval , { lastOp: currentContext.lastOp, results : currentContext.results } ) ) {
+          if( logicEngine.run( command.logicOp , { lastOp: currentContext.lastOp, results : currentContext.results } ) ) {
 
             currentContext.results[idx].status = 'success'
 
           } else {
 
-            currentContext.results[idx].status = 'opEvalFailure'
+            currentContext.results[idx].status = 'logicOpFailure'
 
-            if ( command.onOpEvalFailure === 'throw') {
+            if ( command.onLogicOpFailure === 'throw') {
               currentContext.results[idx].failureAction = 'throw'
-            } else if ( command.onOpEvalFailure === 'stop' ) {
+            } else if ( command.onLogicOpFailure === 'stop' ) {
               currentContext.results[idx].failureAction = 'stop'
             } else {
               currentContext.results[idx].failureAction = 'throw'
@@ -316,7 +350,7 @@ class TransactionalCommandExecutor {
           }
 
         } else {
-          throw new Error(`Unknown command type at index ${idx}: must have either a 'sql' or 'opEval' parameter in the command`)
+          throw new Error(`Unknown command type at index ${idx}: must have either a 'sql' or 'logicOp' parameter in the command`)
         }
 
         currentContext.lastOp = currentContext.results[idx]

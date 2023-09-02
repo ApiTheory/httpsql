@@ -49,7 +49,6 @@ Does a simple fetch of all rows in the projects table.  Use after each example t
 
 Creates a project, attempts to fetch it by name, validates a specific status value, then updates the record with a new status value.  Demonstrates the use of a logic operation (logicOp) to drive future commands.
 
+### 06.sql-command-schema-failure
 
-
-
-
+Uses an incorrectly formatted command to demonstrate how validation errors are thrown.  See the json-schemas directory for the different validation schemas.

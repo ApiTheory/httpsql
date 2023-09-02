@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "logicOp": { "type": "object" },
+    "name": { "type": "string" },
+    "purpose": { "type": "string" },
+    "strict": { "type": "boolean", "default" : true },
+    "onFailure": { "type": "string" }
+  },
+  "required" : ["logicOp"],
+  "additionalProperties" : false
+}

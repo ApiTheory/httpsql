@@ -44,7 +44,7 @@ t.addCommand(
  { 
     "name" : 'check-if-frozen',
     "purpose" : 'if frozen, the status can not be changed',
-    "opEval": {"!==" : ["frozen", {"var" : "lastOp.rows.0.status"}]}
+    "logicOp": {"!==" : ["frozen", {"var" : "lastOp.rows.0.status"}]}
  })
 
  // update the record - note that it will return the new record without running another query

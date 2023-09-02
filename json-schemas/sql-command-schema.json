@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "sql": { "type": "string" },
+    "name": { "type": "string" },
+    "purpose": { "type": "string" },
+    "strict": { "type": "boolean", "default" : true },
+    "params": {
+      "type": "array",
+      "items": [ { "type": [ "integer", "string", "number", "boolean", "null", "array", "object" ]} ]
+    },
+    "expect": { "type": "string", "enum" : [ "zero", "one", "oneormany", "many" ] },
+    "onExpectationFailure": { "type": "string" }
+  },
+  "required" : ["sql", "params"],
+  "additionalProperties" : false
+}
