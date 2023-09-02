@@ -20,7 +20,7 @@ const t = new TransactionalCommandExecutor( client )
 
 t.addCommand(
   { 
-     "sql": "INSERT INTO projects ( name, status ) VALUES ( $1, $2 );",
+     "sql": "INSERT INTO projects ( name, status ) VALUES ( $1, $2 ) RETURNING *;",
      "name": "get-project",
      "strict" : true,
      "params" : ['{newName}', '{newStatus}'],
@@ -34,7 +34,7 @@ t.addCommand(
      "sql": "SELECT id, status, name FROM projects WHERE id = $1;",
      "name": "get-project",
      "strict" : true,
-     "params" : ['{id}'],
+     "params" : ['{lastop:rows.0.id}'],
      "expect" : "one",
      "onExpectationFailure" : "stop"
  })
@@ -53,7 +53,7 @@ t.addCommand(
   { 
     "name" : 'update-project',
     "sql": "UPDATE projects SET name = $2, status = $3 WHERE id = $1 RETURNING *;",
-    "params" : ['{results:rows.0.id}', "{updatedName}", "{updatedStatus}"],
+    "params" : ['{results:0.rows.0.id}', "{updatedName}", "{updatedStatus}"],
     "expect" : "one"
 })
  
@@ -62,13 +62,11 @@ const updateResults = await t.executeTransaction( {
   newStatus: "completed", 
   updatedName: "mars launch", 
   updatedStatus: 'sometime soon' 
-} )
+}, { output : "fullcontext" } )
 
 console.log( '== 05.fetch-update-validate results ===========================================')
 console.log( updateResults )
 console.log( '===============================================================================')
-
-
 
 client.release()
 await pool.end()

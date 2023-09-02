@@ -15,9 +15,6 @@ const logicOpCommandValidationShema = JSON.parse(fs.readFileSync('./json-schemas
 const sqlCommandValidator = ajv.compile( sqlCommandValidationShema )
 const logicOpCommandValidator = ajv.compile( logicOpCommandValidationShema )
 
-const varMatchRegex = /^{([a-zA-Z0-9:\.]*)}$/gm;
-const lastOpMatchRegex = /^{(lastop|results+):([a-zA-Z0-9\.]*)}$/gmi;
-
 function getMatches(string, regex, index) {
   index || (index = 1); // default to the first capturing group
   var matches = [];
@@ -81,11 +78,12 @@ class TransactionalCommandExecutor {
 
     // make sure to set strict to true unless its false
     if ( command.strict === undefined || command.strict === null ) command.strict = true
-
-    // user does not have to pass params, but we must have an array
-    command.params = command.params || []
-
+   
     if ( command.sql ) {
+
+      // user does not have to pass params, but we must have an array
+      command.params = command.params || []
+
       const validCommand = sqlCommandValidator( command )
       if (!validCommand) { 
         throw new CommandValidationError( 'the command object can not be validated',  sqlCommandValidator.errors )  
@@ -187,34 +185,35 @@ class TransactionalCommandExecutor {
         // see if this is a variable substitution
         if ( param.startsWith('{') && param.endsWith('}')) {
           
-          const dynamicField = getMatches( param, varMatchRegex ) 
+          const regex = /{([^}]+)}/ig;
+          const matchedInside = regex.exec( param )
+          
+          if (!matchedInside) {
+            throw new Error( `dynamic parameter '${param} in command ${idx} can not be properly parsed`)
+          }
 
-          if ( dynamicField ) {
+          const matchedParts = matchedInside[1]?.split(':')
 
-            // see if its being defined by a prefix or variable or lastop
-            const prefixSplit = dynamicField[0].split(':')
- 
-            if ( prefixSplit.length === 2 && prefixSplit[0].toLowerCase()==='lastop') {
-
-              // if its a lastop, the value has to be determined at the time of execution, 
-              // so don't do anything here other than assign back and it will be retried
-              executableCommand.params[pidx] = param
-
+          // if this is a lastop or results property, evaluation gets pushed to later.  If its a variable, it gets
+          // evaluated now.  
+          if ( matchedParts.length === 2 && ['lastop', 'results'].includes(matchedParts[0].toLowerCase())) {
+            executableCommand.params[pidx] = param
+          } else if ( matchedParts.length === 1 || matchedParts[0].toLowerCase() === 'variable') {
+            const varName = matchedParts[ matchedParts.length - 1 ]
+            const subVal = dotty.get( variables, varName )
+            if ( subVal !== undefined ) {
+              executableCommand.params[pidx] = subVal
             } else {
-              const varName = prefixSplit[prefixSplit.length-1]
-              const subVal = dotty.get( variables, varName )
-              if ( subVal !== undefined ) {
-                executableCommand.params[pidx] = subVal
+              // if interpretation is strict, then throw error, otherwise put a null
+              if ( command.strict ) {
+                throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
               } else {
-                // if interpretation is strict, then throw error, otherwise put a null
-                if ( command.strict ) {
-                  throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
-                } else {
-                  executableCommand.params[pidx] = null
-                }
+                executableCommand.params[pidx] = null
               }
-
             }
+          
+          } else {
+            throw new Error( `dynamic parameter '${param} in command ${idx} can not be properly parsed`)
           }
         } 
       })
@@ -243,25 +242,26 @@ class TransactionalCommandExecutor {
       await this.beginTransaction( )
 
       for ( idx=0; idx < currentContext.executableCommands.length; idx++ ) {
-    
-        // walk the params one more time for potential lastop replacements
-        currentContext.executableCommands[idx].params.forEach( function ( param, pidx) {
-          
-          if ( param.startsWith('{') && param.endsWith('}')) {
-          
-            const dynamicLastOpField = lastOpMatchRegex.exec( param ) 
-  
-            if ( dynamicLastOpField ) {
 
-              const [ _, type, varname ] = dynamicLastOpField
+        if ( currentContext.executableCommands[idx].sql ) {
+          // walk the params one more time for potential lastop replacements
+
+          currentContext.executableCommands[idx].params.forEach( function ( param, pidx) {
             
-              const subVal = dotty.get( type === 'lastop' ? currentContext.lastOp : currentContext.results, varname )
+            if ( param.startsWith('{') && param.endsWith('}')) {
+
+              const regex = /{([^}]+)}/ig;
+              const matchedInside = regex.exec( param )
+              const [ type, varName ] = matchedInside[1]?.split(':')
+
+              const subVal = dotty.get( type.toLowerCase() === 'lastop' ? currentContext.lastOp : currentContext.results, varName )
+
               if ( subVal !== undefined ) {
                 currentContext.executableCommands[idx].params[pidx] = subVal
               } else {
                 // if interpretation is strict, then throw error, otherwise put a null
                 if ( currentContext.executableCommands[idx].strict ) {
-                  throw new Error( `parameter '${param} in command ${idx} can not be found in the submitted variables object`)
+                  throw new Error( `parameter '${param} in command ${idx} can not be found in the ${ type === 'lastop' ? 'lastOp' : 'results' } object`)
                 } else {
                   currentContext.executableCommands[idx].params[pidx] = null
                 }
@@ -269,10 +269,8 @@ class TransactionalCommandExecutor {
 
             }
 
-          }
-
-        })
-
+          })
+        }
         const command = currentContext.executableCommands[idx]
         
         if ( command.sql ) {
@@ -366,7 +364,6 @@ class TransactionalCommandExecutor {
 
     } catch ( err ) {
     
-
       currentContext.results[idx] = {
         status : 'exception',
         error : err

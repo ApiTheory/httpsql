@@ -45,15 +45,11 @@ t.addCommand(
     expect: "one"
 })
 
-const createProjectFailureResults = await t.executeTransaction( { status: "active", name : "widgetco" }, {output: 'fullcontext' } )
+const createProjectFailureResults = await t.executeTransaction( { status: "stalled", name : "my private project" }, {output: 'fullcontext' } )
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
 console.log( createProjectFailureResults )
-console.log( '===============================================================================')
-
-console.log( '== 03.simple-insert-failure before and after replacement param values =========')
-console.log( createProjectFailureResults.submittedCommands[1].params )
-console.log( createProjectFailureResults.executableCommands[1].params )
+console.log( createProjectFailureResults.results[1] )
 console.log( '===============================================================================')
 
 client.release()
