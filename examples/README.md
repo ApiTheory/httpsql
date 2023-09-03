@@ -4,12 +4,9 @@ This folder has a number of examples that can help provide a feel for httpsql.
 
 ## Setup
 
-Each file expects the following environment variables to be set in order to connect to your postgres database:
+Each file expects the following environment variable to be set in order to connect to your postgres database:
 
-- HOST
-- DATABASE
-- USER
-- PWD
+- DATABASE_URL
 
 We suggest using a .env file in the root of the project to drive these values.  A .env.sample has been provided in the examples directory.
 
