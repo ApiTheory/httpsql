@@ -2,24 +2,12 @@
  * If a table named "projects" exists, it is dropped.  Then a new table named "projects" is created.
  */
 
-import pkg from 'pg';
-const { Pool } = pkg;
+import { getPool } from './utils.js'
 import  { TransactionalCommandExecutor } from '../index.js'
 import 'dotenv/config'
 
-const pool = new Pool({
-  host: process.env.HOST,
-  database: process.env.DATABASE,
-  user: process.env.USER,
-  password: process.env.PWD,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-})
-
-// create a client for all queries
+const pool = getPool()
 const client = await pool.connect()
-
 const t = new TransactionalCommandExecutor( client )
 
 t.addCommand(
@@ -30,10 +18,10 @@ t.addCommand(
 t.addCommand(
   { "sql": `CREATE TABLE IF NOT EXISTS projects
       (
-        id ulid COLLATE pg_catalog."default" PRIMARY KEY NOT NULL DEFAULT generate_ulid(),
-        name citext COLLATE pg_catalog."default" NOT NULL,
-        description citext COLLATE pg_catalog."default",
-        status citext COLLATE pg_catalog."default" NOT NULL DEFAULT 'active'::citext
+        id int PRIMARY KEY NOT NULL,
+        name text NOT NULL,
+        description text ,
+        status text NOT NULL DEFAULT 'active'::text
       );`,
     "name": "create-table",
     "params" : []

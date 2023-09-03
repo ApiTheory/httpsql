@@ -7,32 +7,20 @@
  * It also shows how to retrieve the full context (not just the last operation) of the request through the output option. 
  */
 
-
-import pkg from 'pg';
-const { Pool } = pkg;
 import  { TransactionalCommandExecutor } from '../index.js'
 import 'dotenv/config'
+import { getPool } from './utils.js'
 
-const pool = new Pool({
-  host: process.env.HOST,
-  database: process.env.DATABASE,
-  user: process.env.USER,
-  password: process.env.PWD,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-})
-
-// create a client for all queries
+const pool = getPool()
 const client = await pool.connect()
 
 const t = new TransactionalCommandExecutor( client )
 
 // now do a simple command to insert a row into projects
 t.addCommand(
-  { sql: `INSERT INTO projects ( name, status ) VALUES ($1, $2 ) RETURNING *;`,
+  { sql: `INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;`,
     name: "insert-project",
-    params : [ '{name}', '{status}'],
+    params : [ '{id}', '{name}', '{status}'],
     expect: "one"
 })
 
@@ -45,7 +33,7 @@ t.addCommand(
     expect: "one"
 })
 
-const createProjectFailureResults = await t.executeTransaction( { status: "stalled", name : "my private project" }, {output: 'fullcontext' } )
+const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name : "my private project" }, {output: 'fullcontext' } )
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
 console.log( createProjectFailureResults )

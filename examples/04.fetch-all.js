@@ -1,19 +1,8 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import { getPool } from './utils.js'
 import  { TransactionalCommandExecutor } from '../index.js'
 import 'dotenv/config'
 
-const pool = new Pool({
-  host: process.env.HOST,
-  database: process.env.DATABASE,
-  user: process.env.USER,
-  password: process.env.PWD,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-})
-
-// create a client for all queries
+const pool = getPool()
 const client = await pool.connect()
 
 const t = new TransactionalCommandExecutor( client )
