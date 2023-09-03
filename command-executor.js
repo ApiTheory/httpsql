@@ -15,6 +15,10 @@ const logicOpCommandValidationShema = JSON.parse(fs.readFileSync('./json-schemas
 const sqlCommandValidator = ajv.compile( sqlCommandValidationShema )
 const logicOpCommandValidator = ajv.compile( logicOpCommandValidationShema )
 
+function isString(x) {
+  return Object.prototype.toString.call(x) === "[object String]"
+}
+
 function getMatches(string, regex, index) {
   index || (index = 1); // default to the first capturing group
   var matches = [];
@@ -248,7 +252,7 @@ class TransactionalCommandExecutor {
 
           currentContext.executableCommands[idx].params.forEach( function ( param, pidx) {
             
-            if ( param.startsWith('{') && param.endsWith('}')) {
+            if ( isString(param) && param.startsWith('{') && param.endsWith('}')) {
 
               const regex = /{([^}]+)}/ig;
               const matchedInside = regex.exec( param )
