@@ -37,7 +37,7 @@ class TransactionalCommandExecutor {
 
     this.pgClient = pgClient
     this.name = opts.name
-    this.purpose = opts.purpose
+    this.description = opts.description
     this.submittedCommands = []
     this.executableCommands = []
     this.commandNames = {}
@@ -387,6 +387,18 @@ class TransactionalCommandExecutor {
     return { transactionId: currentContext.transactionId, lastOp : currentContext.lastOp }
     
 
+  }
+
+  get currentState () {
+    return this.transactionState
+  }
+
+  get name() {
+    return this.name
+  }
+
+  get description() {
+    return this.description
   }
 
 }
