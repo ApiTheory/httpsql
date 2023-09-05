@@ -7,7 +7,7 @@ export class CommandValidationError extends Error {
 
     Error.captureStackTrace(this, this.constructor);
 
-    this.errors = errors
+    this.errors = errors || []
   }
 }
 
