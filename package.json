@@ -1,8 +1,8 @@
 {
   "name": "httpsql",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
-  "description": "Execute Postgresql Queries over HTTPS",
+  "description": "Execute SQL Queries over HTTPS",
   "main": "index.js",
   "scripts": {
     "sample1": "node ./examples/01.create-table.js",
