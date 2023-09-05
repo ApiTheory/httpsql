@@ -13,6 +13,6 @@
     "expect": { "type": "string", "enum" : [ "zero", "one", "oneormany", "many" ] },
     "onExpectationFailure": { "type": "string" }
   },
-  "required" : ["sql", "params"],
+  "required" : [ "sql" ],
   "additionalProperties" : false
 }

@@ -8,15 +8,15 @@ import 'dotenv/config'
 
 const pool = getPool()
 const client = await pool.connect()
-const t = new TransactionalCommandExecutor( client )
 
-t.addCommand(
-  { "sql": `DROP TABLE IF EXISTS projects;`,
+const commands = [
+  { 
+    "sql": `DROP TABLE IF EXISTS projects;`,
     "name": "drop-table",
     "params" : []
-})
-t.addCommand(
-  { "sql": `CREATE TABLE IF NOT EXISTS projects
+  },
+  { 
+    "sql": `CREATE TABLE IF NOT EXISTS projects
       (
         id int PRIMARY KEY NOT NULL,
         name text NOT NULL,
@@ -25,7 +25,10 @@ t.addCommand(
       );`,
     "name": "create-table",
     "params" : []
-})
+  }
+]
+
+const t = new TransactionalCommandExecutor( client, commands )
 
 const result = await t.executeTransaction( { status: "active", name : "apitheory" } )
 

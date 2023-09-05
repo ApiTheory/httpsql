@@ -13,10 +13,10 @@ t.addCommand(
      "sql": "SELECT * FROM projects;"
  })
  
-const results = await t.executeTransaction( )
+const queryResults = await t.executeTransaction( )
 
 console.log( '== 04.fetch-all results =======================================================')
-console.log( results.lastOp.rows )
+console.log( queryResults.results.rows )
 console.log( '===============================================================================')
 
 client.release()

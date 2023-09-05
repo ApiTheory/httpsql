@@ -29,15 +29,16 @@ t.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ($1, $2, $3 ) RETURNING *;`,
     name: "insert-project",
     strict: false,
-    params : [ '{lastop:rows.0.id}', '{variable:name}', '{status}'],
+    params : [ '{lastop.rows.0.id}', '{variable.name}', '{status}'],
     expect: "one"
 })
 
+// requesting the full context - usually only necessary for debugging
 const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name : "my private project" }, {output: 'fullcontext' } )
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
 console.log( createProjectFailureResults )
-console.log( createProjectFailureResults.results[1] )
+console.log( createProjectFailureResults.context.results )
 console.log( '===============================================================================')
 
 client.release()

@@ -23,7 +23,7 @@ t.addCommand(
      "sql": "SELECT id, status, name FROM projects WHERE id = $1;",
      "name": "get-project",
      "strict" : true,
-     "params" : ['{lastop:rows.0.id}'],
+     "params" : ['{lastop.rows.0.id}'],
      "expect" : "one",
      "onExpectationFailure" : "stop"
  })
@@ -42,7 +42,7 @@ t.addCommand(
   { 
     "name" : 'update-project',
     "sql": "UPDATE projects SET name = $2, status = $3 WHERE id = $1 RETURNING *;",
-    "params" : ['{results:0.rows.0.id}', "{updatedName}", "{updatedStatus}"],
+    "params" : ['{results.0.rows.0.id}', "{updatedName}", "{updatedStatus}"],
     "expect" : "one"
 })
  
@@ -56,6 +56,8 @@ const updateResults = await t.executeTransaction( {
 
 console.log( '== 05.fetch-update-validate results ===========================================')
 console.log( updateResults )
+console.log( updateResults.context.results )
+
 console.log( '===============================================================================')
 
 client.release()
