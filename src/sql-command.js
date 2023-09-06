@@ -63,7 +63,7 @@ export class SqlCommand extends Command {
             
             // make sure its not a number before accepting it
             if ( isNumeric(parts[1]) ) {
-              throw new Error(`the variable name '${parts[1]}' is a number` )
+              throw new Error(`the dynamic parameter '{${matchedInside[1]}}' is a number` )
             }
 
             this._executableParams.push( param )
@@ -71,6 +71,11 @@ export class SqlCommand extends Command {
           } else if ( parts.length === 1 || parts[0].toLowerCase() === 'variable') {
             
             const varName = parts[ parts.length - 1 ]
+
+            if ( isNumeric(varName) ) {
+              throw new Error(`the dynamic parameter '{${varName}}' is a number` )
+            }
+
             const subVal = dotty.get( submittedVariables, varName )
             
             if ( subVal !== undefined ) {
@@ -81,7 +86,7 @@ export class SqlCommand extends Command {
 
               // if interpretation is strict, then throw error, otherwise put a null
               if ( this._strict ) {
-                throw new Error( `parameter '${param}' not found in variables`)
+                throw new Error( `parameter '${param}' not found`)
               } else {
                 this._executableParams.push( null ) 
               }
@@ -100,6 +105,7 @@ export class SqlCommand extends Command {
         }
 
       } else {
+
         // a static non-string value
         this._executableParams.push( param )
       }
