@@ -11,7 +11,7 @@
       "items": [ { "type": [ "integer", "string", "number", "boolean", "null", "array", "object" ]} ]
     },
     "expect": { "type": "string", "enum" : [ "zero", "one", "oneormany", "many" ] },
-    "onExpectationFailure": { "type": "string" }
+    "onExpectationFailure": { "type": ["string", "object"] }
   },
   "required" : [ "sql" ],
   "additionalProperties" : false
