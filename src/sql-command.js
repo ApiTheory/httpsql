@@ -62,7 +62,7 @@ export class SqlCommand extends Command {
           if ( parts.length > 1 && ['lastop', 'results'].includes(parts[0].toLowerCase())) {
             
             // make sure its not a number before accepting it
-            if ( isNumeric(parts[1]) ) {
+            if ( parts[0].toLowerCase() === 'lastop' && isNumeric(parts[1]) ) {
               throw new Error(`the dynamic parameter '{${matchedInside[1]}}' is a number` )
             }
 
