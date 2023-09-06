@@ -10,7 +10,6 @@ class TransactionalCommandExecutor {
     assert.ok(Array.isArray(commands), 'the commands argument must be an array')
     assert.ok( client, 'the client argument must be defined')
     assert.ok( typeof client.query === 'function', 'the client argument must have a query method')
-    assert.ok( typeof client.release === 'function', 'the client argument must have a release method')
 
     this._client = client
     this._context = new Context()

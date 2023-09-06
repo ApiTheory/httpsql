@@ -5,8 +5,7 @@ describe('TransactionalCommandExecutor', () => {
   
   const clientMock = {
     id: 'testClient',
-    query: async (sql, params) => { return Promise.resolve() },
-    release: async() => { }
+    query: async (sql, params) => { return Promise.resolve() }
   }
 
   const clientMockQuery = sinon.spy(clientMock, 'query' )
@@ -38,15 +37,8 @@ describe('TransactionalCommandExecutor', () => {
 
   it('should throw if client does not have query method', () => {
     expect(() => {
-      new TransactionalCommandExecutor({ release: ()=> {}})
+      new TransactionalCommandExecutor({ })
     }).to.throw('the client argument must have a query method')
-  
-  })
-
-  it('should throw if client does not have end method', () => {
-    expect(() => {
-      new TransactionalCommandExecutor({ query: ( sql, params )=> {}})
-    }).to.throw('the client argument must have a release method')
   
   })
 
