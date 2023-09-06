@@ -11,8 +11,8 @@ describe('Command', () => {
   })
 
   it('should be a Command', () => {
-    const c = new Command( simpleCommandText );
-    expect(c).to.be.an.instanceOf(Command);
+    const c = new Command( simpleCommandText )
+    expect(c).to.be.an.instanceOf(Command)
   })
 
   it('constructor defaults should be correct', () => {
