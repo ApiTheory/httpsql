@@ -6,7 +6,7 @@
     "name": { "type": "string" },
     "purpose": { "type": "string" },
     "strict": { "type": "boolean", "default" : true },
-    "onFailure": { "type": "string" }
+    "onFailure": { "type": ["string", "object"] }
   },
   "required" : ["logicOp"],
   "additionalProperties" : false
