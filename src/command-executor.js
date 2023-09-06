@@ -121,9 +121,7 @@ class TransactionalCommandExecutor {
       // unhandled exception, try to rollback and then throw the error
       await this.rollbackTransaction( )
       throw err
-    } finally {
-      this._client.release()
-    }
+    } 
     
 
   }  
