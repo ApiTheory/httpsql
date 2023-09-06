@@ -4,21 +4,20 @@ export class Command  {
 
   constructor( command, opts = {} ) {
 
+    if (!command) {
+      throw new Error('the command argument must be defined')
+    }
+
     this._genId = opts.genId || (() => {
       return ulid()
     })
     
     this._command = command
-
     this._id = opts.id || this._genId()
     this._name = opts.name
     this._description = opts.description
     this._strict = ( opts.strict !== undefined && opts.strict !== null ) 
 
-  }
-
-  generateExecutableParams ( submittedVariables) {
-    // noop
   }
 
   get id() {
@@ -37,4 +36,7 @@ export class Command  {
     return this._strict
   }
 
+  get command() {
+    return this._command
+  }
 }

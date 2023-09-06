@@ -1,36 +1,25 @@
 import { DatabaseError } from 'pg-protocol';
 import * as assert from 'assert';
-import { LogicEngine } from 'json-logic-engine'
 import { ulid } from 'ulidx'
 import { Context } from './context.js'
 
-const logicEngine = new LogicEngine()
-
-
-function getMatches(string, regex, index) {
-  index || (index = 1); // default to the first capturing group
-  var matches = [];
-  var match;
-  while (match = regex.exec(string)) {
-    matches.push(match[index]);
-  }
-  return matches;
-}
-
 class TransactionalCommandExecutor {
 
-  constructor ( pgClient, commands = [], opts = {} ) {
+  constructor ( client, commands = [], opts = {} ) {
     
     assert.ok(Array.isArray(commands), 'the commands argument must be an array')
+    assert.ok( client, 'the client argument must be defined')
+    assert.ok( typeof client.query === 'function', 'the client argument must have a query method')
+    assert.ok( typeof client.release === 'function', 'the client argument must have a release method')
 
-    this._pgClient = pgClient
+    this._client = client
     this._context = new Context()
     this._name = opts.name
     this._description = opts.description
     this._submittedCommands = []
     this._executableCommands = []
     this._commandNames = {}
-    this._transactionExecuted = false
+    this._transactionExecutionStarted = false
     this._transactionState = 'not-started'
     this._genId = opts.genId || (() => {
       return ulid()
@@ -47,17 +36,13 @@ class TransactionalCommandExecutor {
   }
 
   async beginTransaction ( ) {
-
+    
     if (this._transactionState === 'not-started') {
-
       this._transactionState = 'transact-begin-start'
-      await this._pgClient.query( 'BEGIN' )
+      await this._client.query( 'BEGIN' )
       this._transactionState = 'transact-begin-complete'
-
     } else {
-
       throw new Error(`the transaction can not be started because its state = '${this._transactionState}'`)
-
     }
 
   }
@@ -67,7 +52,7 @@ class TransactionalCommandExecutor {
     if (["transact-begin-complete"].includes(this._transactionState) ) {
 
       this._transactionState = 'transact-rollback-start'
-      await this._pgClient.query( 'ROLLBACK' )
+      await this._client.query( 'ROLLBACK' )
       this._transactionState = 'transact-rollback-complete'
 
     } else {
@@ -83,28 +68,12 @@ class TransactionalCommandExecutor {
     if ( this._transactionState === 'transact-begin-complete' ) {
 
       this._transactionState = 'transact-commit-start'
-      await this._pgClient.query( 'COMMIT' )
+      await this._client.query( 'COMMIT' )
       this._transactionState = 'transact-commit-complete'
 
     } else {
 
-      throw new Error(`the transaction can not be started because its state = '${this._transactionState}'`)
-
-    }
-
-  }
-  
-  async finalizeTransaction ( )  {
-
-    if ( this._transactionState === 'transact-rollback-complete' || this._transactionState === 'transact-commit-complete' ) {
-
-      this._transactionState = 'transact-finalize-start'
-      await this._pgClient.release()
-      this._transactionState = 'transact-finalize-complete'
-
-    } else {
-
-      throw new Error(`the transaction can not be finalized because its state = '${this._transactionState}'`)
+      throw new Error(`the transaction can not be committed because its state = '${this._transactionState}'`)
 
     }
 
@@ -112,24 +81,27 @@ class TransactionalCommandExecutor {
   
   async executeTransaction ( variables = {}, opts = {} ) {
 
-    if ( this.transactionExecuted ) {
-      throw new Error( 'The command executor object can only call this method one time; create a new object in order to execute a new transaction. ')
+    if ( this._transactionExecutionStarted ) {
+      throw new Error( 'the command executor object can only call this method one time - create a new object in order to execute a new transaction' )
     }
 
-    this._transactionExecuted = true
+    this._transactionExecutionStarted = true
 
     const currentContext = this._context
+
+    if ( currentContext.commands.length === 0 ) {
+      return { finalState: 'nothing-to-do', results: [] }
+    }
+
 
     // process submitted vars
     currentContext.assignVariables( variables )
         
-    let idx
-
     try {
 
       await this.beginTransaction( )
 
-      const { transactionState, results } = await this._context.executeCommands( this._pgClient )
+      const { transactionState, results } = await currentContext.executeCommands( this._client )
 
       if ( transactionState === 'stop' || transactionState === 'success' ) {
         await this.commitTransaction( ) 
@@ -140,7 +112,7 @@ class TransactionalCommandExecutor {
       if ( opts.output === 'allresults') {
         return { finalState: transactionState, results }
       } else if ( opts.output === 'fullcontext') {
-        return { finalState: transactionState, context: this._context.finalOutput }
+        return { finalState: transactionState, context: currentContext.finalOutput }
       } else {
         return { finalState: transactionState, results: results[results.length-1] }
       }
@@ -149,10 +121,16 @@ class TransactionalCommandExecutor {
       // unhandled exception, try to rollback and then throw the error
       await this.rollbackTransaction( )
       throw err
-    } 
+    } finally {
+      this._client.release()
+    }
     
 
   }  
+
+  get commands() {
+    return this._context.commands
+  }
 
   get currentState () {
     return this._transactionState
@@ -166,8 +144,12 @@ class TransactionalCommandExecutor {
     return this._description
   }
 
-  get transactionExecuted() {
-    return this._transactionExecuted
+  /**
+   * Flag that indicates the executeTransaction method has been called.  This method can only ever be 
+   * called once per instance.
+   */
+  get transactionExecutionStarted() {
+    return this._transactionExecutionStarted
   }
 
   get id() {
