@@ -153,9 +153,9 @@ export class SqlCommand extends Command {
 
   }
 
-  async execute ( pgClient ) {
+  async execute ( client ) {
     
-    const result = await pgClient.query( this._command, this._finalizedParams ) 
+    const result = await client.query( this._command, this._finalizedParams ) 
 
     const { rowCount, rows } = result
 
