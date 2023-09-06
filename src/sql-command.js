@@ -19,7 +19,7 @@ export class SqlCommand extends Command {
 
     const validCommand = sqlCommandValidator( command )
     if (!validCommand) { 
-      throw new CommandValidationError( 'the command object can not be validated',  sqlCommandValidator.errors )  
+      throw new CommandValidationError( 'the sql command object can not be validated',  sqlCommandValidator.errors )  
     }
 
     const { sql, ...opts } = command
@@ -31,7 +31,7 @@ export class SqlCommand extends Command {
     this._executableParams = []
     this._finalizedParams = []
     this._expect = opts.expect
-    this._onExpectationFailure = opts.onExpectationFailure
+    this._onExpectationFailure = opts.onExpectationFailure || 'throw'
     
   }
 
