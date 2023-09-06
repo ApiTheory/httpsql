@@ -9,8 +9,6 @@ const basicLogicCommand = {
 }
 
 describe('LogicCommand', () => {
-    
-  
 
   it('should be a function', () => {
     expect(LogicCommand).to.be.a('function')
