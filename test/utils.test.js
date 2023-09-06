@@ -13,6 +13,7 @@ describe('isNumeric()', () => {
 
   it('should return true if the value is a number', () => {
     expect(isNumeric(1)).true
+    expect(isNumeric('1')).true
   })
 
   it('should return false if the value is not a number', () => {

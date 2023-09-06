@@ -7,7 +7,7 @@ export const isString = (x) => {
 }
 
 export const isNumeric = (val) => {
-  return Number( parseFloat( val ) ) === val
+  return /^-?\d+$/.test(val);
 }
 
 export const getDirName = ( url ) => {
