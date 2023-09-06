@@ -18,14 +18,14 @@ export class LogicCommand extends Command {
 
     const validCommand = logicOpCommandValidator( command )
     if (!validCommand) { 
-      throw new CommandValidationError( 'the command object can not be validated',  logicOpCommandValidator.errors )  
+      throw new CommandValidationError( 'the logic command object can not be validated',  logicOpCommandValidator.errors )  
     }
 
     const { logicOp, ...opts } = command
 
     super( logicOp, opts )
 
-    this._onFailure = opts.onFailure
+    this._onFailure = opts.onFailure || 'throw'
 
   }
 
@@ -45,7 +45,7 @@ export class LogicCommand extends Command {
         return { status : 'stop' }
 
       } else if ( this._onFailure.message ) {
-        const { message, code, ...additionalData } = this._onExpectationFailure
+        const { message, code, ...additionalData } = this._onFailure
         throw new LogicOpFailureError( message, code, additionalData )
       } else {
 
