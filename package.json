@@ -11,7 +11,8 @@
     "sample4": "node ./examples/04.fetch-all.js",
     "sample5": "node ./examples/05.fetch-validate-update.js",
     "sample6": "node ./examples/06.sql-command-schema-failure.js",
-    "test": "mocha"
+    "test": "mocha",
+    "testcoverage": "c8 --reporter=html mocha"
   },
   "repository": {
     "type": "git",
@@ -33,7 +34,9 @@
     "ulidx": "^2.1.0"
   },
   "devDependencies": {
+    "c8": "^8.0.1",
     "chai": "^4.3.8",
-    "mocha": "^10.2.0"
+    "mocha": "^10.2.0",
+    "sinon": "^15.2.0"
   }
 }
