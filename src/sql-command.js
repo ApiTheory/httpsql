@@ -114,8 +114,15 @@ export class SqlCommand extends Command {
 
   }
 
+  /**
+   * Expects current result sets from previous commands.  Will attempt to substitute dynamic parameters with
+   * values from the previous result sets.
+   * @param {*} results 
+   */
   transactionalResultValueSubstitution( results ) {
 
+    // even if there are no results, need to walk the executable params to make them
+    // finalized.  This will also catch parameters that refer to unknown result values.
     for ( let x=0; x < this._executableParams.length; x++ ) {
       
       const param = this._executableParams[x]
@@ -128,8 +135,12 @@ export class SqlCommand extends Command {
         if ( matchedInside ) {
           
           const varName = matchedInside[1]
-          const subVal = dotty.get( { lastop: structuredClone( results[ results.length -1 ] ), results: structuredClone( results ) } , varName )
-              
+          const comparisonObject = { lastop: structuredClone( results[ results.length -1 ] ), results: structuredClone( results ) }
+          console.log( varName)
+          console.log( comparisonObject)
+
+          const subVal = dotty.get( comparisonObject , varName )
+          console.log( subVal)    
           if ( subVal !== undefined ) {
   
             this._finalizedParams.push( subVal )

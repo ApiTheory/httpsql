@@ -425,4 +425,50 @@ describe('SqlCommand', () => {
 
   })
 
+  describe('transactionalResultValueSubstitution', () => {
+
+    const results = [
+      {
+        status: 'success',
+        rowCount : 1,
+        rows: [ { id: 1, name: 'test1' } ]
+      },
+      { status: 'success' },
+      {
+        status: 'success',
+        rowCount : 2,
+        rows: [ { id: 1, name: 'test1' }, { id: 2, name: 'test2' } ]
+      }
+    ]
+
+    it( 'will complete with correct substitutions', () => {
+      
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.0.id}', '{results.0.rows.0.name}'] } )
+      // status willl have been filled in during variable substitution - shouldnt really be part of test, but using it as an example
+      c._executableParams = [ 1, 'active', '{lastop.rows.0.id}', '{results.2.rows.1.name}']
+      c.transactionalResultValueSubstitution( results )
+      expect(c._finalizedParams).to.deep.equal([ 1, 'active', 1, 'test2' ])
+
+    })
+
+    it( 'will replace null if dynamic param not correct if strict=false', () => {
+      
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.1.id}', '{results.0.rows.5.name}'] } )
+      c._executableParams = [ 1, 'active', '{lastop.rows.1.id}', '{results.2.rows.5.name}']
+      c.transactionalResultValueSubstitution( results )
+      expect(c._finalizedParams).to.deep.equal([ 1, 'active', 2, null ])
+
+    })
+
+    it( 'will throw if dynamic param not correct and strict=true', () => {
+      
+      const c = new SqlCommand( { strict: true, sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.1.id}', '{results.0.rows.5.name}'] } )
+      c._executableParams = [ 1, 'active', '{lastop.rows.1.id}', '{results.2.rows.5.name}']
+
+      expect(() => c.transactionalResultValueSubstitution( results )).to.throw(`parameter '{results.2.rows.5.name}' not found`)
+
+    })
+
+  })
+
 })
