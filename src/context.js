@@ -76,7 +76,7 @@ export class Context {
 
   }
 
-  async executeCommands( pgClient ) {
+  async executeCommands( client ) {
 
     if ( this._commands.length === 0 ) {
       return { transactionState: 'nothing-to-do', results: [] }
@@ -130,7 +130,7 @@ export class Context {
 
         try {
 
-          const { rowCount, rows, status } = await currentCommand.execute( pgClient )
+          const { rowCount, rows, status } = await currentCommand.execute( client )
           
           if ( status === 'stop' ) {
             this._transactionState = 'stop'
