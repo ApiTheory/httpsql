@@ -1,4 +1,3 @@
-import { DatabaseError } from 'pg-protocol';
 import * as assert from 'assert';
 import { ulid } from 'ulidx'
 import { Context } from './context.js'
