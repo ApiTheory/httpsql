@@ -1,51 +1,56 @@
 import { SqlCommand } from "./sql-command.js"
 import { LogicCommand } from "./logic-command.js"
-
+import { Command  } from "./command.js"
+import { CommandValidationError } from "./errors.js"
 export class Context {
 
   constructor( ) {
     this._commands = []
     this._commandNames = {}
-    this._transactionExecuted = false
     this._transactionState = 'not-started'
     this._results = []
     this._variables
+    this._transactionExecuted
   }
 
   addCommand( command ) {
 
-    if ( command.name ) {
-      
-      if ( this._commandNames[command.name]) {
-        throw new Error(`a command with the name '${command.name}' already exists`)
+    if ( command.name && Object.keys(this._commandNames).includes(command.name)) {
+      throw new Error(`a command with the name '${command.name}' already exists`)
+    }
+
+    if ( command instanceof Command ) {
+
+      this._commands.push( command )
+
+    } else {
+
+      if ( !command.sql && !command.logicOp ) {
+        const errors = [
+          { 
+            keyword: 'missingOneOfProperties',
+            message: `unknown command type: must have either a 'sql' or 'logicOp' parameter in the command`
+          }
+        ]
+        throw new CommandValidationError( 'the command object can not be validated',  errors )  
       }
 
-      this._commandNames[command.name] = this._commandNames.length
+      if ( command.sql && command.logicOp ) {
+        const errors = [
+          { 
+            keyword: 'clashingProperties',
+            message: `unknown command type: can not have both 'sql' and 'logicOp' parameters in the command`
+          }
+        ]
+        throw new CommandValidationError( 'the command object can not be validated',  errors )  
+      }
 
+      this._commands.push( command.sql ? new SqlCommand( command ) : new LogicCommand( command ) )
     }
 
-    if ( !command.sql && !command.logicOp ) {
-      const errors = [
-        { 
-          keyword: 'missingOneOfProperties',
-          message: `unknown command type: must have either a 'sql' or 'logicOp' parameter in the command`
-        }
-      ]
-      throw new CommandValidationError( 'the command object can not be validated',  errors )  
+    if ( command.name ) {
+      this._commandNames[command.name] = this._commands.length-1
     }
-
-    if ( command.sql && command.logicOp ) {
-      const errors = [
-        { 
-          keyword: 'clashingProperties',
-          message: `unknown command type: can not have both 'sql' and 'logicOp' parameters in the command`
-        }
-      ]
-      throw new CommandValidationError( 'the command object can not be validated',  errors )  
-    }
-
-    this._commands.push( command.sql ? new SqlCommand( command ) : new LogicCommand( command ) )
-    
   }
 
   /**
@@ -56,8 +61,8 @@ export class Context {
    * @returns 
    */
   assignVariables( submittedVariables = [] ) {
-    
-    this._variables = submittedVariables
+
+    this._variables = submittedVariables || []
     if ( this._variables.length === 0 ) return
 
     this._commands.filter((c) => c.type === 'sql').forEach(( command, idx ) => {
@@ -210,6 +215,15 @@ export class Context {
 
   }
 
+  getCommandByName( name ) {
+    if ( Object.keys(this._commandNames).includes(name) ) {
+      return this._commands[this._commandNames[name]]
+    } else {
+      return null
+    }
+  }
+ 
+
   get results() {
     return this._results
   }
@@ -222,12 +236,5 @@ export class Context {
     return this._transactionState
   }
 
-  get finalOutput() {
-    return {
-      commands: this._commands,
-      transactionState: this._transactionState,
-      results: this._results,
-      submittedParameters : this._variables
-    }
-  }
+
 }
