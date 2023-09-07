@@ -111,7 +111,7 @@ class TransactionalCommandExecutor {
       if ( opts.output === 'allresults') {
         return { finalState: transactionState, results }
       } else if ( opts.output === 'fullcontext') {
-        return { finalState: transactionState, context: currentContext.finalOutput }
+        return { finalState: transactionState, context: currentContext }
       } else {
         return { finalState: transactionState, results: results[results.length-1] }
       }
