@@ -97,11 +97,9 @@ describe('SqlCommand', () => {
     }).to.throw(`the dynamic parameter '{lastop.3}' is a number`)
   })
 
-  it('should throw if a dynamic parameter results is a number', () => {
+  it('should not throw if the 2nd element of dynamic parameter results is a number', () => {
     const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{variable.status}', '{results.99}'] } } )
-    expect(() => {
-      c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-    }).to.throw(`the dynamic parameter '{results.99}' is a number`)
+    c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
   })
 
   
