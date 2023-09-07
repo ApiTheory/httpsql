@@ -10,7 +10,7 @@ const t = new TransactionalCommandExecutor( client )
 t.addCommand(
   { 
      "sql": "INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;",
-     "name": "get-project",
+     "name": "insert-project-1",
      "strict" : true,
      "params" : [ '{newId}', '{newName}', '{newStatus}'],
      "expect" : "one",

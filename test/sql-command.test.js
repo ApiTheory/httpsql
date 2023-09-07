@@ -1,6 +1,7 @@
 import { SqlCommand } from '../src/sql-command.js';
 import { expect } from 'chai'
 import sinon from 'sinon'
+import { ExpectationFailureError } from '../src/errors.js'
 
 const basicSqlCommand = {
   sql: 'SELECT * FROM table'
@@ -115,6 +116,313 @@ describe('SqlCommand', () => {
     expect(() => {
       c.preTransactionVariableSubstitution( { id: 5, name: 'testname' })
     }).to.throw(`parameter '{variable.status}' not found`)
+  })
+
+  describe('execute method', () => {
+    
+  
+  
+    it('should throw if client not passed as argument', async () => {
+      
+      const c = new SqlCommand( { sql : 'select * from test' } )
+      
+      let thrown = false
+
+      try {
+        await c.execute()
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(Error)
+        expect(e.message).to.equal('a client is required to execute commands')
+      }
+
+      expect(thrown).to.equal(true)
+
+    })
+
+    it('should throw if client.query rejects', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.reject(new Error('Mutumbo with the rejection!')) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test' } )
+      
+      let thrown = false
+
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(Error)
+        expect(e.message).to.equal('Mutumbo with the rejection!')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+    })
+
+    it('client.query returns rows and rowCount successfully but match for many fails', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1}]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'many' } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount > 1 but received 1')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 0 rows and rowCount successfully but match for one', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 0, rows: []}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'one' } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 1 but received 0')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 2 rows and rowCount successfully but match for one', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 2, rows: [{id:1} , {id: 2}]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'one' } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 1 but received 2')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 2 rows and rowCount successfully but match for zero', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 2, rows: [{id:1} , {id: 2}]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'zero' } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 0 but received 2')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 1 rows and rowCount successfully but match for zero', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'zero' } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 0 but received 1')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 1 rows and rowCount successfully but match for NUMERIC zero', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 0 } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 0 but received 1')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 1 rows and rowCount successfully but match for 1000', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000 } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('expected rowCount = 1000 but received 1')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 1 rows and rowCount successfully but match for 1000 and onExpectationFailure STOP', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000, onExpectationFailure: 'stop' } )
+      
+      const result = await c.execute( clientMock)
+      expect(result).to.deep.equal({
+        rows: [ { id: 1 } ],
+        rowCount: 1,
+        status: 'stop',
+        expectationFailureMessage: 'expected rowCount = 1000 but received 1'
+      })
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+
+    })
+
+    it('client.query 1 rows and rowCount successfully but match for 1000 and onExpectationFailure = custom message', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000, onExpectationFailure: { message : 'just say something special', code: 't555' } } )
+      
+      let thrown = false
+      try {
+        await c.execute( clientMock)
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(ExpectationFailureError)
+        expect(e.message).to.equal('just say something special')
+      }
+
+      expect(thrown).to.equal(true)
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+    })
+
+    it('client.query success', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test' } )
+      const result = await c.execute( clientMock)
+      expect(result).to.deep.equal({ rowCount: 1, rows: [ { id: 1 } ], status: 'success' })
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
+
+    })
+
   })
 
 })

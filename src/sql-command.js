@@ -161,6 +161,10 @@ export class SqlCommand extends Command {
 
   async execute ( client ) {
     
+    if (!client ) {
+      throw new Error( 'a client is required to execute commands')
+    }
+
     const result = await client.query( this._command, this._finalizedParams ) 
 
     const { rowCount, rows } = result

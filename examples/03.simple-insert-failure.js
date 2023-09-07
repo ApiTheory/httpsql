@@ -19,7 +19,7 @@ const t = new TransactionalCommandExecutor( client )
 // now do a simple command to insert a row into projects
 t.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;`,
-    name: "insert-project",
+    name: "insert-project-1",
     params : [ '{id}', '{name}', '{status}'],
     expect: "one"
 })
@@ -27,7 +27,7 @@ t.addCommand(
 // attempt to insert a new project with the same ID as the previous one
 t.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ($1, $2, $3 ) RETURNING *;`,
-    name: "insert-project",
+    name: "insert-project-2",
     strict: false,
     params : [ '{lastop.rows.0.id}', '{variable.name}', '{status}'],
     expect: "one"
