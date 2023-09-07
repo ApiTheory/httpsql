@@ -1,7 +1,9 @@
+import { DatabaseError } from 'pg-protocol'
 import { SqlCommand } from "./sql-command.js"
 import { LogicCommand } from "./logic-command.js"
 import { Command  } from "./command.js"
-import { CommandValidationError } from "./errors.js"
+import { CommandValidationError, ExpectationFailureError } from "./errors.js"
+
 export class Context {
 
   constructor( ) {
@@ -67,7 +69,7 @@ export class Context {
 
     this._commands.filter((c) => c.type === 'sql').forEach(( command, idx ) => {
       try {
-        command.preTransactionVariableSubstitution( this._variables )
+        command.preTransactionVariableSubstitution( structuredClone(this._variables) )
       } catch ( err ) {
         err.message= `variable assignment failure on command ${idx}: ${err.message}`
         throw err
@@ -78,12 +80,16 @@ export class Context {
 
   async executeCommands( client ) {
 
-    if ( this._commands.length === 0 ) {
-      return { transactionState: 'nothing-to-do', results: [] }
+    if (!client ) {
+      throw new Error( 'a client is required to execute commands')
     }
 
     if ( this._transactionState !== 'not-started' ) {
       throw new Error( `The context can only execute commands one time.  The current transactionState === '${this._transactionState}'`)
+    }
+
+    if ( this._commands.length === 0 ) {
+      return { transactionState: 'nothing-to-do', results: [] }
     }
 
     // walk through each of the commands
@@ -95,7 +101,7 @@ export class Context {
 
       if ( stopProcessing ) {
         this._results.push( {
-          status: 'notExecuted'
+          status: 'not-executed'
         })
         continue
       }
@@ -106,7 +112,8 @@ export class Context {
         
         try {
           
-          currentCommand.transactionalResultValueSubstitution( this._results )
+          // need to have a snapshot of the results and not the real results otherwise those will just change on every iteration
+          currentCommand.transactionalResultValueSubstitution( structuredClone( this._results ) )
 
         } catch ( err ) {
           
@@ -135,26 +142,54 @@ export class Context {
           if ( status === 'stop' ) {
             this._transactionState = 'stop'
             stopProcessing = true
-          } 
-
-          result = {
-            status: 'success',
-            rowCount,
-            rows
+            result = {
+              status: 'expectation-failure',
+              failureAction : 'stop',
+              rowCount,
+              rows
+            }
+          } else {
+            result = {
+              status: 'success',
+              rowCount,
+              rows
+            }
           }
 
         } catch ( err ) {
 
-          err.message = `database error occured at command index ${idx}: ${err.message}`
-          
-          result = {
-            status: 'databaseFailure',
-            failureAction : 'throw' ,
-            error : err
+          if ( err instanceof DatabaseError ) {
+
+            err.message = `database error occured at command index ${idx}: ${err.message}`
+            
+            result = {
+              status: 'database-failure',
+              failureAction : 'throw' ,
+              error : err
+            }
+
+          } else if ( err instanceof ExpectationFailureError ) {
+
+            err.message = `expectation failure occured at command index ${idx}: ${err.message}`
+            
+            result = {
+              status: 'expectation-failure',
+              failureAction : 'throw' ,
+              error : err
+            }
+
+          } else {
+
+            result = {
+              status: 'unhandled-exception',
+              failureAction : 'throw' ,
+              error : err
+            }
+
           }
-          
-          stopProcessing = true
-          this._transactionState = 'error'
+
+            stopProcessing = true
+            this._transactionState = 'error'
 
         } finally {
 
@@ -172,23 +207,34 @@ export class Context {
 
         try {
 
-          const { status } = await currentCommand.execute( this._results )
+          const { status } = await currentCommand.execute( structuredClone(this._results) )
           
           if ( status === 'stop' ) {
+            
+            result = {
+              status: 'logic-failure',
+              failureAction : 'stop'
+            }
+
             this._transactionState = 'stop'
             stopProcessing = true
-          } 
-          
-          result = {
-            status
+
+          } else {
+
+            result = {
+              status: 'success'
+            }
+
           }
+          
+          
 
         } catch ( err ) {
 
-          err.message = `logic error occured at command index ${idx}: ${err.message}`
+          err.message = `logic failure occured at command index ${idx}: ${err.message}`
           
           result = {
-            status: 'logicError',
+            status: 'logic-failure',
             failureAction : 'throw' ,
             error : err
           }

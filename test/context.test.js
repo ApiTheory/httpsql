@@ -1,9 +1,11 @@
 import { Context } from '../src/context.js'
 import { expect } from 'chai'
 import sinon from 'sinon'
-import { CommandValidationError } from '../src/errors.js'
+import { CommandValidationError, ExpectationFailureError, LogicOpFailureError } from '../src/errors.js'
 import { Command } from '../src/command.js'
 import { SqlCommand } from '../src/sql-command.js'
+import { LogicCommand } from '../src/logic-command.js'
+import { DatabaseError } from 'pg-protocol'
 // create unit test suite
 
 describe('Context', () => { 
@@ -107,7 +109,360 @@ describe('Context', () => {
 
 
   })
+
+  describe('executeCommands methods', () => {
+
+    const clientMock = {
+      id: 'testClient',
+      query: async (sql, params) => { return Promise.resolve() }
+    }
   
+    const clientMockQuery = sinon.spy(clientMock, 'query' )
+  
+    afterEach(() => {
+      clientMockQuery.resetHistory()
+    })
+  
+    // create unit test for executeCommands method with valid arguments
+    it('throws if missing client argument', async () => {
+      const context = new Context()
+      let thrown = false
+      try {
+        await context.executeCommands()
+      } catch ( err )  {
+        thrown = true
+        expect(err).to.be.instanceOf(Error)
+        expect(err.message).to.equal('a client is required to execute commands')
+      }
+      
+      expect(thrown).true
+
+    })
+
+    it('throws if transaction already started', async () => {
+      
+      const context = new Context()
+      context._transactionState = 'started'
+
+      let thrown = false
+      try {
+        await context.executeCommands(clientMock)
+      } catch ( err )  {
+        thrown = true
+        expect(err).to.be.instanceOf(Error)
+        expect(err.message).to.equal(`The context can only execute commands one time.  The current transactionState === 'started'`)
+      }
+      
+      expect(thrown).true
+
+    })
+
+    it('exits early if no commands to execute', async () => {
+      const context = new Context()
+      const result = await context.executeCommands( clientMock )
+      expect(result).deep.equals({ transactionState: 'nothing-to-do', results: [] })
+    })
+
+    it('executes all commands successfully and returns result', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).resolves({ status: 'success', rowCount: 1, rows: [ { id: 1 } ] })
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(1)
+      expect(command3executeStub.callCount).equals(1)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0]).to.be.instanceOf(Array)
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0].length).equal(2)
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0][0].status).equal('success')
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0][0].rowCount).equal(1)
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0][0].rows).to.deep.equal([{ id: 1 }])
+      expect(command3transactionalResultValueSubstitutionStub.firstCall.args[0][1].status).equal('success')
+      expect( command1executeStub.firstCall.args[0].id).equals('testClient')
+      expect( command3executeStub.firstCall.args[0].id).equals('testClient')
+      
+      expect( command2executeStub.firstCall.args[0][0].status).equals('success')
+      expect( command2executeStub.firstCall.args[0][0].rowCount).equals(1)
+      expect( command2executeStub.firstCall.args[0][0].rows).to.deep.equal([{ id: 1 }])
+
+      expect( result.transactionState).equals('success' )
+      expect( result.results.length).equals(3)
+      expect( result.results[0].status).equals('success')
+      expect( result.results[0].rowCount).equals(1)
+      expect( result.results[0].rows).to.deep.equal([{ id: 1 }])
+      expect( result.results[1].status).equals('success')
+      expect( result.results[2].status).equals('success')
+      expect( result.results[2].rowCount).equals(2)
+      expect( result.results[2].rows).to.deep.equal([{ id: 1 }, { id: 2 }])
+
+    })
+
+    it('if sql command stops processing, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).resolves({ status: 'stop' })
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(0)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[0].status).equals('expectation-failure')
+      expect(result.results[0].failureAction).equals('stop')
+      expect(result.results[1].status).equals('not-executed')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if logic command stops processing, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).resolves({ status: 'success', rowCount: 1, rows: [ { id: 1 } ] })
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'stop' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(1)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[1].status).equals('logic-failure')
+      expect(result.results[1].failureAction).equals('stop')
+      expect(result.results[0].status).equals('success')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if logic command throws error, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).resolves({ status: 'success', rowCount: 1, rows: [ { id: 1 } ] })
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).rejects(new LogicOpFailureError('it was illogical') )
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(1)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[1].status).equals('logic-failure')
+      expect(result.results[1].failureAction).equals('throw')
+      expect(result.results[1].error).to.be.an.instanceOf(LogicOpFailureError)
+      expect(result.results[0].status).equals('success')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if command throws DatabaseError during execute stage, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).rejects(new DatabaseError('a db error just happened'))
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(0)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[0].status).equals('database-failure')
+      expect(result.results[0].failureAction).equals('throw')
+      expect(result.results[0].error).to.be.instanceOf(DatabaseError)
+      expect(result.results[1].status).equals('not-executed')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if command throws ExpectationFailureError  during execute stage, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).rejects(new ExpectationFailureError ('an expectation died'))
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(0)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[0].status).equals('expectation-failure')
+      expect(result.results[0].failureAction).equals('throw')
+      expect(result.results[0].error).to.be.instanceOf(ExpectationFailureError)
+      expect(result.results[1].status).equals('not-executed')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if command throws Error  during execute stage, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).returns()
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).rejects(new Error ('un unexpected error just happened'))
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(1)
+      expect(command2executeStub.callCount).equals(0)
+      expect(command3executeStub.callCount).equals(0)
+
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+      expect(result.results[0].status).equals('unhandled-exception')
+      expect(result.results[0].failureAction).equals('throw')
+      expect(result.results[0].error).to.be.instanceOf(Error)
+      expect(result.results[1].status).equals('not-executed')
+      expect(result.results[2].status).equals('not-executed')
+
+    })
+
+    it('if command fails transactionalResultValueSubstitution, all additional commands do not get processed', async () => {
+
+      const command1 = new SqlCommand( { sql:'select * from test1' } )
+      const command2 = new LogicCommand( { logicOp: { '===' : ['active', { 'var' :'status'}]}})
+      const command3 = new SqlCommand( { sql:'select * from test2' } )
+
+      const command1transactionalResultValueSubstitutionStub = sinon.stub(command1, 'transactionalResultValueSubstitution' ).throws(new Error('an error occurred'))
+      const command3transactionalResultValueSubstitutionStub = sinon.stub(command3, 'transactionalResultValueSubstitution' ).returns()
+  
+      const command1executeStub = sinon.stub(command1, 'execute' ).resolves({ status: 'stop' })
+      const command3executeStub = sinon.stub(command3, 'execute' ).resolves({ status: 'success', rowCount: 2, rows: [ { id: 1 }, { id: 2 } ] })
+      const command2executeStub = sinon.stub(command2, 'execute' ).resolves({ status: 'success' })
+
+      const context = new Context()
+      context.addCommand( command1 )
+      context.addCommand( command2 )
+      context.addCommand( command3 )
+
+      const result = await context.executeCommands( clientMock )
+
+      expect(command1transactionalResultValueSubstitutionStub.callCount).equals(1)
+      expect(command3transactionalResultValueSubstitutionStub.callCount).equals(0)
+      expect(command1executeStub.callCount).equals(0)
+      expect(command2executeStub.callCount).equals(0)
+      expect(command3executeStub.callCount).equals(0)
+      expect(command1transactionalResultValueSubstitutionStub.firstCall.args[0]).to.deep.equal([])
+
+      expect(result.transactionState).equals('error')
+      expect(result.results[0].status).equals('dynamicParameterAssignmentFailure')
+      expect(result.results[0].failureAction).equals('throw')
+      expect(result.results[0].error).to.be.instanceOf(Error)
+      expect(result.results[1].status).equals('not-executed')
+      expect(result.results[2].status).equals('not-executed')            
+
+    })
+    
+  })
+  
+
   describe('getCommandByName method', () => {
 
     it('can get a command by the name', () => {
