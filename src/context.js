@@ -3,58 +3,25 @@ import { SqlCommand } from "./sql-command.js"
 import { LogicCommand } from "./logic-command.js"
 import { Command  } from "./command.js"
 import { CommandValidationError, ExpectationFailureError } from "./errors.js"
+import { Root } from "./root.js"
+import * as assert from 'assert'
 
 export class Context {
 
-  constructor( ) {
-    this._commands = []
-    this._commandNames = {}
-    this._transactionState = 'not-started'
+  constructor( rootNode ) {
+
+    assert.ok( rootNode instanceof Root, 'root must be an instance of Root')
+
+    this._rootNode = rootNode
+    Object.freeze(this._rootNode)  // once rootNode is assigned to the context, its frozen to prevent further modifications
+    this._executionState = 'not-started'
     this._results = []
     this._variables
     this._transactionExecuted
+
   }
 
-  addCommand( command ) {
-
-    if ( command.name && Object.keys(this._commandNames).includes(command.name)) {
-      throw new Error(`a command with the name '${command.name}' already exists`)
-    }
-
-    if ( command instanceof Command ) {
-
-      this._commands.push( command )
-
-    } else {
-
-      if ( !command.sql && !command.logicOp ) {
-        const errors = [
-          { 
-            keyword: 'missingOneOfProperties',
-            message: `unknown command type: must have either a 'sql' or 'logicOp' parameter in the command`
-          }
-        ]
-        throw new CommandValidationError( 'the command object can not be validated',  errors )  
-      }
-
-      if ( command.sql && command.logicOp ) {
-        const errors = [
-          { 
-            keyword: 'clashingProperties',
-            message: `unknown command type: can not have both 'sql' and 'logicOp' parameters in the command`
-          }
-        ]
-        throw new CommandValidationError( 'the command object can not be validated',  errors )  
-      }
-
-      this._commands.push( command.sql ? new SqlCommand( command ) : new LogicCommand( command ) )
-    }
-
-    if ( command.name ) {
-      this._commandNames[command.name] = this._commands.length-1
-    }
-  }
-
+ 
   /**
    * Attempts to process variables and conduct substitution in
    * the commands.  Will throw errors for missing vars so the
@@ -65,11 +32,12 @@ export class Context {
   assignVariables( submittedVariables = [] ) {
 
     this._variables = submittedVariables || []
+
     if ( this._variables.length === 0 ) return
 
-    this._commands.filter((c) => c.type === 'sql').forEach(( command, idx ) => {
+    this._rootNode.commands.filter((c) => c.type === 'sql').forEach(( command, idx ) => {
       try {
-        command.preTransactionVariableSubstitution( structuredClone(this._variables) )
+        command.preTransactionVariableSubstitution( structuredClone( this._variables ) )
       } catch ( err ) {
         err.message= `variable assignment failure on command ${idx}: ${err.message}`
         throw err
@@ -84,20 +52,20 @@ export class Context {
       throw new Error( 'a client is required to execute commands')
     }
 
-    if ( this._transactionState !== 'not-started' ) {
-      throw new Error( `The context can only execute commands one time.  The current transactionState === '${this._transactionState}'`)
+    if ( this._executionState !== 'not-started' ) {
+      throw new Error( `The context can only execute commands one time.  The current transactionState === '${this._executionState}'`)
     }
 
-    if ( this._commands.length === 0 ) {
-      return { transactionState: 'nothing-to-do', results: [] }
+    if ( this._rootNode.commands.length === 0 ) {
+      return { executionState: 'nothing-to-do', results: [] }
     }
 
     // walk through each of the commands
     let stopProcessing = false
     
-    this._transactionState = 'started'
+    this._executionState = 'started'
 
-    for ( let idx=0; idx < this._commands.length; idx++ ) {
+    for ( let idx=0; idx < this._rootNode.commands.length; idx++ ) {
 
       if ( stopProcessing ) {
         this._results.push( {
@@ -106,7 +74,7 @@ export class Context {
         continue
       }
 
-      const currentCommand = this._commands[idx]
+      const currentCommand = this._rootNode.commands[idx]
       
       if ( currentCommand.type === 'sql' ) {
         
@@ -126,7 +94,7 @@ export class Context {
           })
           
           stopProcessing = true
-          this._transactionState = "error"
+          this._executionState = "error"
 
         }
 
@@ -140,7 +108,7 @@ export class Context {
           const { rowCount, rows, status } = await currentCommand.execute( client )
           
           if ( status === 'stop' ) {
-            this._transactionState = 'stop'
+            this._executionState = 'stop'
             stopProcessing = true
             result = {
               status: 'expectation-failure',
@@ -188,8 +156,8 @@ export class Context {
 
           }
 
-            stopProcessing = true
-            this._transactionState = 'error'
+          stopProcessing = true
+          this._executionState = 'error'
 
         } finally {
 
@@ -216,7 +184,7 @@ export class Context {
               failureAction : 'stop'
             }
 
-            this._transactionState = 'stop'
+            this._executionState = 'stop'
             stopProcessing = true
 
           } else {
@@ -240,7 +208,7 @@ export class Context {
           }
           
           stopProcessing = true
-          this._transactionState = "error"
+          this._executionState = "error"
 
         } finally {
           
@@ -253,34 +221,28 @@ export class Context {
       }
     }
 
-    if ( this._transactionState !== 'stop' && this._transactionState !== 'error' ) {
-      this._transactionState = this._results[this._results.length-1].status
+    if ( this._executionState !== 'stop' && this._executionState !== 'error' ) {
+      this._executionState = this._results[this._results.length-1].status
     }
     
-    return { transactionState: this.transactionState, results: this._results }
+    return { executionState: this._executionState, results: this._results }
 
   }
-
-  getCommandByName( name ) {
-    if ( Object.keys(this._commandNames).includes(name) ) {
-      return this._commands[this._commandNames[name]]
-    } else {
-      return null
-    }
-  }
- 
 
   get results() {
     return this._results
   }
 
   get commands() {
-    return this._commands
+    return this._rootNode.commands
   }
 
-  get transactionState() {
-    return this._transactionState
+  get executionState() {
+    return this._executionState
   }
 
+  set executionState ( state ) {  
+    this._executionState = state
+  }
 
 }
