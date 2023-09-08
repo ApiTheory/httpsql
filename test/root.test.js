@@ -107,7 +107,22 @@ describe.only('Root', () => {
       expect(r.id).equal('test-id')
       expect(r.commands).deep.equal([])
     })
+    
+    it('should accept name in opts argument', () => {
+      const r = new Root( [], { name: 'test-name'} )
+      expect(r.name).equal('test-name')
+    })
 
+    it('should accept description in opts argument', () => {
+      const r = new Root( [], { description: 'test-description'} )
+      expect(r.description).equal('test-description')
+    })
+
+    it('should accept params in opts argument', () => {
+      const r = new Root( [], { params: { foo: 'bar' } } )
+      expect(r.params).deep.equal({ foo: 'bar' })
+    })
+    
   })
 
   describe('addCommand', () => {
