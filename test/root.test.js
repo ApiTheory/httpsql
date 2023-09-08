@@ -4,7 +4,7 @@ import { SqlCommand } from '../src/sql-command.js'
 import { CommandValidationError } from '../src/errors.js'
 // create unit test suite
 
-describe.only('Root', () => {
+describe('Root', () => {
   
   describe('constructor', () => {
 
@@ -30,6 +30,27 @@ describe.only('Root', () => {
 
     it('should have commands property', () => {
       expect(new Root()).to.have.property('commands')
+    })
+
+    it('should throw if command argument not an array', () => {
+      expect(() => {
+        new Root(  {})
+      }).to.throw('the commands argument must be an array')
+      expect(() => {
+        new Root(  '')
+      }).to.throw('the commands argument must be an array')
+      expect(() => {
+        new Root(  3)
+      }).to.throw('the commands argument must be an array')
+      expect(() => {
+        new Root(  true)
+      }).to.throw('the commands argument must be an array')
+      expect(() => {
+        new Root(  false)
+      }).to.throw('the commands argument must be an array')
+      expect(() => {
+        new Root( Date.now())
+      }).to.throw('the commands argument must be an array')
     })
 
     it( 'should have an addCommand method', () => {
