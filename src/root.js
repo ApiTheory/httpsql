@@ -4,11 +4,17 @@ import { ulid } from 'ulidx'
 import { CommandValidationError } from './errors.js'
 import { SqlCommand } from './sql-command.js'
 import { LogicCommand } from './logic-command.js'
+import { isPlainObject } from './util.js'
 
 export class Root {
   
   constructor( commands = [], opts = {}) {
 
+    if ( arguments.length === 1 && isPlainObject( arguments[0] ) ) {
+      opts = structuredClone( arguments[0] )
+      commands = []
+    }
+    
     assert.ok(Array.isArray(commands), 'the commands argument must be an array')
     
     this._genId = opts.genId || (() => {
