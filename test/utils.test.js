@@ -1,7 +1,7 @@
 import { expect } from 'chai'
-import { isString, isNumeric, getDirName } from '../src/util.js'
-
-describe('utils', () => {
+import { isString, isNumeric, getDirName, isPlainObject } from '../src/util.js'
+import { Root } from '../src/root.js'
+describe.only('utils', () => {
 
   describe('getDirName()', () => {
 
@@ -44,6 +44,24 @@ describe('utils', () => {
       expect(isString([])).false
     })
 
+  })
+
+  describe('isPlainObject()', () => {
+    it('should return true if the value is a plain object', () => {
+      expect(isPlainObject({})).true
+      expect(isPlainObject({ id: 1, name: 'test'})).true
+    })
+    it('should return false if the value is not a plain object', () => {
+      expect(isPlainObject([])).false
+      expect(isPlainObject(1)).false
+      expect(isPlainObject(true)).false
+      expect(isPlainObject(false)).false
+      expect(isPlainObject(null)).false
+      expect(isPlainObject(undefined)).false
+      expect(isPlainObject('sting')).false
+      expect(isPlainObject(new Date())).false
+      expect(isPlainObject(new Root())).false
+    })
   })
 
 })
