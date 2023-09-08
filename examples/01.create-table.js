@@ -3,7 +3,8 @@
  */
 
 import { getPool } from './utils.js'
-import  { TransactionalCommandExecutor } from '../index.js'
+import  { TransactionManager } from '../index.js'
+import { Root } from '../src/root.js'
 import 'dotenv/config'
 
 const pool = getPool()
@@ -28,7 +29,8 @@ const commands = [
   }
 ]
 
-const t = new TransactionalCommandExecutor( client, commands )
+const r = new Root( commands )
+const t = new TransactionManager( client, r )
 
 const result = await t.executeTransaction( { status: "active", name : "apitheory" } )
 

@@ -1,7 +1,7 @@
 // @ts-check
 'use strict'
 
-import { TransactionalCommandExecutor } from './src/command-executor.js'
+import { TransactionManager } from './src/transaction-manager.js'
 
-export default TransactionalCommandExecutor 
-export { TransactionalCommandExecutor }
+export default TransactionManager 
+export { TransactionManager  }
