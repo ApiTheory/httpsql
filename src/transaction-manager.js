@@ -6,8 +6,7 @@ import { Root } from './root.js'
 class TransactionManager {
 
   constructor ( client, rootNode ) {
-    
-   
+       
     assert.ok( client, 'the client argument must be defined')
     assert.ok( typeof client.query === 'function', 'the client argument must have a query method')
     assert.ok( rootNode instanceof Root, 'the root node is required and must be an instance of the Root class')  
@@ -77,7 +76,7 @@ class TransactionManager {
 
     // the beginTransaction method must be called but can be called before the executeTransaction method
     if ( this._transactionState !== 'transact-begin-complete' && this._transactionState !== 'not-started' ) {
-      throw new Error(`the transaction can not be executed because its state = '${this._context.transactionState}'`)
+      throw new Error(`the transaction can not be executed because its state = '${this._transactionState}'`)
     }
 
     // process submitted vars and do it before transaction is started in case there are errors
@@ -112,28 +111,15 @@ class TransactionManager {
       // unhandled exception, try to rollback and then throw the error
       await this.rollbackTransaction( )
       throw err
+
     } finally {
+
       this._transactionState = 'transact-execute-complete'
+      
     }
     
 
   }  
-
-  get commands() {
-    return this._context.commands
-  }
-
-  get name() {
-    return this._name
-  }
-
-  get description() {
-    return this._description
-  }
-
-  get id() {
-    return this._id
-  }
 
   get transactionState() {
     return this._transactionState

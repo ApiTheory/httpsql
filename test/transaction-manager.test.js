@@ -3,8 +3,9 @@ import {TransactionManager} from '../src/transaction-manager.js'
 import { Root } from '../src/root.js'
 import sinon from 'sinon'
 
-describe.only('TransactionManager', () => {
+describe('TransactionManager', () => {
   
+
   const clientMock = {
     id: 'testClient',
     query: async (sql, params) => { return Promise.resolve() }
@@ -16,42 +17,43 @@ describe.only('TransactionManager', () => {
     clientMockQuery.resetHistory()
   })
 
-  it('should be a function', () => {
-    expect(TransactionManager).to.be.a('function')
-  })
+  describe('constructor', () => { 
 
-  it('should be a TransactionManager', () => {
-    const t = new TransactionManager( clientMock, new Root() );
-    expect(t).to.be.an.instanceOf(TransactionManager);
-  })
+    it('should be a function', () => {
+      expect(TransactionManager).to.be.a('function')
+    })
 
-  it('should be created', () => {
+
+    it('should be a TransactionManager', () => {
+      const t = new TransactionManager( clientMock, new Root() );
+      expect(t).to.be.an.instanceOf(TransactionManager);
+    })
+
+    it('should be created', () => {
+        const t = new TransactionManager( clientMock, new Root() )
+        expect(t).to.be.ok
+    });
+
+    it('should throw if client not passed to constructor', () => {
+      expect(() => {
+        new TransactionManager(null)
+      }).to.throw('the client argument must be defined')
+    })
+
+    it('should throw if client does not have query method', () => {
+      expect(() => {
+        new TransactionManager({ })
+      }).to.throw('the client argument must have a query method')
+    
+    })
+
+    it('constructor defaults should be correct', () => {
       const t = new TransactionManager( clientMock, new Root() )
-      expect(t).to.be.ok
-  });
+      expect(t.name).to.be.undefined
+      expect(t.description).to.be.undefined
+      expect(t.transactionState).to.equal('not-started')
+    })
 
-  it('should throw if client not passed to constructor', () => {
-    expect(() => {
-      new TransactionManager(null)
-    }).to.throw('the client argument must be defined')
-  })
-
-  it('should throw if client does not have query method', () => {
-    expect(() => {
-      new TransactionManager({ })
-    }).to.throw('the client argument must have a query method')
-  
-  })
-
- 
-
-
-
-  it('constructor defaults should be correct', () => {
-    const t = new TransactionManager( clientMock, new Root() )
-    expect(t.name).to.be.undefined
-    expect(t.description).to.be.undefined
-    expect(t.transactionState).to.equal('not-started')
   })
 
   it('should call beginTransaction method successfully', async () => {
@@ -162,6 +164,54 @@ describe.only('TransactionManager', () => {
 
   })
 
+  it('executeTransaction should fail if rollback already called', async () => {
+    
+    const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
+    const assignVariablesStub = sinon.stub(t._context, 'assignVariables')
+    const executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    
+    await t.beginTransaction()
+    await t.rollbackTransaction()
+
+    let thrown = false
+    try {
+      const results = await t.executeTransaction( { id: 1, name: 'test' })
+    } catch ( err) {
+      thrown = true
+      expect(err).to.be.an.instanceOf(Error)
+      expect(err.message).to.equal(`the transaction can not be executed because its state = 'transact-rollback-complete'`)
+    }
+   
+    expect(thrown).to.be.true
+    expect(assignVariablesStub.callCount).equal(0)
+    expect(clientMockQuery.callCount).equal(2)
+    expect( executeCommandsStub.callCount).equal(0)
+  })
+
+  it('executeTransaction should fail if commit already called', async () => {
+    
+    const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
+    const assignVariablesStub = sinon.stub(t._context, 'assignVariables')
+    const executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    
+    await t.beginTransaction()
+    await t.commitTransaction()
+
+    let thrown = false
+    try {
+      const results = await t.executeTransaction( { id: 1, name: 'test' })
+    } catch ( err) {
+      thrown = true
+      expect(err).to.be.an.instanceOf(Error)
+      expect(err.message).to.equal(`the transaction can not be executed because its state = 'transact-commit-complete'`)
+    }
+   
+    expect(thrown).to.be.true
+    expect(assignVariablesStub.callCount).equal(0)
+    expect(clientMockQuery.callCount).equal(2)
+    expect( executeCommandsStub.callCount).equal(0)
+  })
+
   it('executeTransaction called with variables, executeCommand returns success, default output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
@@ -201,7 +251,7 @@ describe.only('TransactionManager', () => {
     expect(executeCommandsStub.callCount).equal(1)
     expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
     expect( results ).to.deep.equal({ finalState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] })
-    
+    expect ( t.transactionState).equal('transact-execute-complete')
   })
 
   it('executeTransaction called with variables, executeCommand returns success, full context output', async () => {
@@ -295,6 +345,7 @@ describe.only('TransactionManager', () => {
     }
     
     expect(thrown).equal(true)
+
   })
 
   it('executTransaction method rejects', async () => {
