@@ -1,36 +1,22 @@
 import * as assert from 'assert';
 import { ulid } from 'ulidx'
 import { Context } from './context.js'
+import { Root } from './root.js'
 
-class TransactionalCommandExecutor {
+class TransactionManager {
 
-  constructor ( client, commands = [], opts = {} ) {
+  constructor ( client, rootNode ) {
     
-    assert.ok(Array.isArray(commands), 'the commands argument must be an array')
+   
     assert.ok( client, 'the client argument must be defined')
     assert.ok( typeof client.query === 'function', 'the client argument must have a query method')
+    assert.ok( rootNode instanceof Root, 'the root node is required and must be an instance of the Root class')  
 
     this._client = client
-    this._context = new Context()
-    this._name = opts.name
-    this._description = opts.description
-    this._submittedCommands = []
-    this._executableCommands = []
-    this._commandNames = {}
-    this._transactionExecutionStarted = false
+    this._context = new Context( rootNode )
+    this._transactionStarted = false
     this._transactionState = 'not-started'
-    this._genId = opts.genId || (() => {
-      return ulid()
-    })
-    this._id = opts.id || this._genId()
 
-    commands.forEach( (command)=> {
-      this.addCommand( command )
-    })
-  }
-
-  addCommand( command ) {
-    this._context.addCommand( command )
   }
 
   async beginTransaction ( ) {
@@ -47,7 +33,7 @@ class TransactionalCommandExecutor {
 
   async rollbackTransaction ( ) {
 
-    if (["transact-begin-complete"].includes(this._transactionState) ) {
+    if (["transact-begin-complete", "transact-execute-start"].includes(this._transactionState) ) {
 
       this._transactionState = 'transact-rollback-start'
       await this._client.query( 'ROLLBACK' )
@@ -58,12 +44,12 @@ class TransactionalCommandExecutor {
       throw new Error(`the transaction can not be rolled back because its state = '${this._transactionState}'`)
 
     }
-
+ 
   }
   
   async commitTransaction ( ) {
 
-    if ( this._transactionState === 'transact-begin-complete' ) {
+    if ( this._transactionState === 'transact-begin-complete' || this._transactionState === 'transact-execute-start' ) {
 
       this._transactionState = 'transact-commit-start'
       await this._client.query( 'COMMIT' )
@@ -78,58 +64,63 @@ class TransactionalCommandExecutor {
   }
   
   async executeTransaction ( variables = {}, opts = {} ) {
-
-    if ( this._transactionExecutionStarted ) {
-      throw new Error( 'the command executor object can only call this method one time - create a new object in order to execute a new transaction' )
+    
+    if ( this._transactionStarted ) {
+      throw new Error( 'a transaction can only be started once - create a new object in order to execute a new transaction' )
     }
 
-    this._transactionExecutionStarted = true
+    this._transactionStarted=true
 
-    const currentContext = this._context
-
-    if ( currentContext.commands.length === 0 ) {
+    if ( this._context.commands.length === 0 ) {
       return { finalState: 'nothing-to-do', results: [] }
     }
 
+    // the beginTransaction method must be called but can be called before the executeTransaction method
+    if ( this._transactionState !== 'transact-begin-complete' && this._transactionState !== 'not-started' ) {
+      throw new Error(`the transaction can not be executed because its state = '${this._context.transactionState}'`)
+    }
 
-    // process submitted vars
-    currentContext.assignVariables( variables )
+    // process submitted vars and do it before transaction is started in case there are errors
+    this._context.assignVariables( variables )
         
     try {
 
-      await this.beginTransaction( )
+      if ( this._transactionState === 'not-started' ) {
+        await this.beginTransaction( )
+      }
 
-      const { transactionState, results } = await currentContext.executeCommands( this._client )
+      this._transactionState = 'transact-execute-start'
 
-      if ( transactionState === 'stop' || transactionState === 'success' ) {
+      const { executionState, results } = await this._context.executeCommands( this._client )
+     
+      if ( executionState === 'stop' || executionState === 'success' ) {
         await this.commitTransaction( ) 
       } else {
         await this.rollbackTransaction( )
       }
 
       if ( opts.output === 'allresults') {
-        return { finalState: transactionState, results }
+        return { finalState: executionState, results }
       } else if ( opts.output === 'fullcontext') {
-        return { finalState: transactionState, context: currentContext }
+        return { finalState: executionState, context: this._context }
       } else {
-        return { finalState: transactionState, results: results[results.length-1] }
+        return { finalState: executionState, results: results[results.length-1] }
       }
 
     } catch ( err ) {
+
       // unhandled exception, try to rollback and then throw the error
       await this.rollbackTransaction( )
       throw err
-    } 
+    } finally {
+      this._transactionState = 'transact-execute-complete'
+    }
     
 
   }  
 
   get commands() {
     return this._context.commands
-  }
-
-  get currentState () {
-    return this._transactionState
   }
 
   get name() {
@@ -140,19 +131,15 @@ class TransactionalCommandExecutor {
     return this._description
   }
 
-  /**
-   * Flag that indicates the executeTransaction method has been called.  This method can only ever be 
-   * called once per instance.
-   */
-  get transactionExecutionStarted() {
-    return this._transactionExecutionStarted
-  }
-
   get id() {
     return this._id
   }
 
+  get transactionState() {
+    return this._transactionState
+  }
+
 }
 
-export default TransactionalCommandExecutor
-export { TransactionalCommandExecutor }
+export default TransactionManager
+export { TransactionManager  }
