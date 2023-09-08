@@ -11,6 +11,4 @@ export const getPool = () => {
     connectionTimeoutMillis: 2000,
   })
 
-
-
 }

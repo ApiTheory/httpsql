@@ -1,7 +1,8 @@
 import { expect } from 'chai'
 import { isString, isNumeric, getDirName, isPlainObject } from '../src/util.js'
 import { Root } from '../src/root.js'
-describe.only('utils', () => {
+
+describe('utils', () => {
 
   describe('getDirName()', () => {
 

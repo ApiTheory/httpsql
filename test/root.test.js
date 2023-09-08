@@ -4,7 +4,7 @@ import { SqlCommand } from '../src/sql-command.js'
 import { CommandValidationError } from '../src/errors.js'
 // create unit test suite
 
-describe.only('Root', () => {
+describe('Root', () => {
   
   describe('constructor', () => {
 
