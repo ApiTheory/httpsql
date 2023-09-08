@@ -136,11 +136,9 @@ export class SqlCommand extends Command {
           
           const varName = matchedInside[1]
           const comparisonObject = { lastop: structuredClone( results[ results.length -1 ] ), results: structuredClone( results ) }
-          console.log( varName)
-          console.log( comparisonObject)
 
           const subVal = dotty.get( comparisonObject , varName )
-          console.log( subVal)    
+   
           if ( subVal !== undefined ) {
   
             this._finalizedParams.push( subVal )
