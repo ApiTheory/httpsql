@@ -2,6 +2,5 @@
 'use strict'
 
 import { TransactionManager } from './src/transaction-manager.js'
-
-export default TransactionManager 
-export { TransactionManager  }
+import { Root as HttpSqlRoot } from './src/root.js'
+export { TransactionManager, HttpSqlRoot  }
