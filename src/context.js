@@ -129,13 +129,15 @@ export class Context {
 
           if ( err instanceof DatabaseError ) {
 
-            err.message = `database error occured at command index ${idx}: ${err.message}`
-            
             result = {
               status: 'database-failure',
               failureAction : 'throw' ,
+              errorMessage: err.message,
               error : err
             }
+
+            err.message = `database error occured at command index ${idx}: ${err.message}`
+            
 
           } else if ( err instanceof ExpectationFailureError ) {
 
