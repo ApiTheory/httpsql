@@ -85,13 +85,14 @@ export class Context {
 
         } catch ( err ) {
           
-          err.message= `transactional result value assignment failure occurred at command index ${idx}: ${err.message}`
-          
           this._results.push ( {
             status: 'dynamicParameterAssignmentFailure',
             failureAction : 'throw' ,
+            errorMessage: err.message,
             error : err
           })
+
+          err.message= `transactional result value assignment failure occurred at command index ${idx}: ${err.message}`
           
           stopProcessing = true
           this._executionState = "error"
@@ -199,13 +200,14 @@ export class Context {
 
         } catch ( err ) {
 
-          err.message = `logic failure occured at command index ${idx}: ${err.message}`
-          
           result = {
             status: 'logic-failure',
             failureAction : 'throw' ,
+            errorMessage: err.message,
             error : err
           }
+          
+          err.message = `logic failure occured at command index ${idx}: ${err.message}`
           
           stopProcessing = true
           this._executionState = "error"
