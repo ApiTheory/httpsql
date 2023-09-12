@@ -6,10 +6,10 @@ import path from 'path';
 import { Command } from './command.js'
 import { CommandValidationError, ExpectationFailureError } from './errors.js'
 import { isString, isNumeric, getDirName } from './util.js'
+import { sqlCommandSchema } from './json-schemas/sql-command-schema.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false })
-const sqlCommandValidationShema = JSON.parse(fs.readFileSync(path.resolve( getDirName( import.meta.url ), '../json-schemas/sql-command-schema.json')))
-const sqlCommandValidator = ajv.compile( sqlCommandValidationShema )
+const sqlCommandValidator = ajv.compile( sqlCommandSchema )
 
 const regex = new RegExp('{([^}]+)}');
 

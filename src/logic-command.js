@@ -6,11 +6,11 @@ import { getDirName } from './util.js'
 import { Command } from './command.js'
 import { CommandValidationError, LogicOpFailureError } from './errors.js'
 import { LogicEngine } from 'json-logic-engine'
+import { logicOpSchema } from './json-schemas/logicop-command-schema.js'
 
 const logicEngine = new LogicEngine()
 const ajv = new Ajv({ allErrors: true, strict: false })
-const logicOpCommandValidationShema = JSON.parse(fs.readFileSync(path.resolve( getDirName( import.meta.url ), '../json-schemas/logicop-command-schema.json'))) 
-const logicOpCommandValidator = ajv.compile( logicOpCommandValidationShema )
+const logicOpCommandValidator = ajv.compile( logicOpSchema )
 
 export class LogicCommand extends Command {
 
