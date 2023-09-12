@@ -1,16 +1,14 @@
 import { DatabaseError } from 'pg-protocol'
-import { SqlCommand } from "./sql-command.js"
-import { LogicCommand } from "./logic-command.js"
-import { Command  } from "./command.js"
-import { CommandValidationError, ExpectationFailureError } from "./errors.js"
 import { Root } from "./root.js"
-import * as assert from 'assert'
+import { ExpectationFailureError } from './errors.js'
 
 export class Context {
 
   constructor( rootNode ) {
 
-    assert.ok( rootNode instanceof Root, 'root must be an instance of Root')
+    if ( !(rootNode instanceof Root) ) {
+      throw new Error('root must be an instance of Root')
+    }
 
     this._rootNode = rootNode
     Object.freeze(this._rootNode)  // once rootNode is assigned to the context, its frozen to prevent further modifications
@@ -102,7 +100,7 @@ export class Context {
         if ( stopProcessing ) continue;
 
         const startTs = process.hrtime.bigint()
-        let result
+        let result = {}
 
         try {
 

@@ -1,5 +1,4 @@
 import { Command } from './command.js'
-import * as assert from 'assert'
 import { ulid } from 'ulidx'
 import { CommandValidationError } from './errors.js'
 import { SqlCommand } from './sql-command.js'
@@ -15,7 +14,9 @@ export class Root {
       commands = []
     }
     
-    assert.ok(Array.isArray(commands), 'the commands argument must be an array')
+    if (!Array.isArray(commands)) {
+      throw new Error('the commands argument must be an array')
+    }
     
     this._genId = opts.genId || (() => {
       return ulid()
