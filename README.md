@@ -4,8 +4,8 @@ Execute SQL Queries over HTTPS.  A simple POC to see if HttpSql is a reasonable 
 
 - [HttpSql Documentation](http://www.httpsql.com)
 - [HttpSql Playground](http://www.httpsql.com/docs/httpsql-playground)
-- [Community Discussions](https://github.com/ApiTheory/httpsql/discussions). Ask questions to get a better understanding of HttpSql.
-- [GitHub Issues](https://github.com/ApiTheory/httpsql/issues). Submit bugs, errors and inconsistences you find in HttpSql.
+- [Community Discussions](https://github.com/ApiTheory/httpsql/discussions) - ask questions to get a better understanding of HttpSql.
+- [GitHub Issues](https://github.com/ApiTheory/httpsql/issues) - submit bugs, errors and inconsistences you find in HttpSql.
 
 ## Rationale
 
@@ -27,8 +27,8 @@ Here is the simplest example of the format of an HTTPSql request:
 
 ``` JSON
 [
-  sql: "SELECT * FROM accounts WHERE name = $1",
-  params: [ "acme" ]
+  "sql" : "SELECT * FROM accounts WHERE name = $1",
+  "params" : [ "acme" ]
 ]
 ```
 
@@ -63,14 +63,17 @@ Here is something a bit more complex. The goal is to get a project by it's id, t
 }
 ```
 
-It may look like a lot, but its doing the following which would require a lot more code to do correctly:
+It may look like a lot, but its doing the following which would require far more code to do correctly:
 
 - retrieve the project and if it does not exist throw an exception; it will also throw if more than 1 row is returned.
 - check to make sure the project is complete and if not throw an error.
 - update the project with the new data using the ID that was retrieved in the first operation; check to make sure only 1 record was updated; throw an error if no rows were updated or too many rows were updated.
 - return the data from the updated project.
 
-In addition to throwing exceptions, onExpectationFailure can just equal 'stop.'  If that happens, then the entire transaction is commited up to that point, but no additional commands will execute.
+In addition to throwing exceptions, onExpectationFailure can just equal 'stop.'  If that happens, then the entire transaction is commited up to that point, but no additional commands will execute.  
+
+A nice feature of the HttpSql response is that every step taken within the transaction is documented.  This can be saved for audit purposes and just
+general debugging.
 
 ## Learn More
 
