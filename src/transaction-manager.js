@@ -78,9 +78,6 @@ class TransactionManager {
     if ( this._transactionState !== 'transact-begin-complete' && this._transactionState !== 'not-started' ) {
       throw new Error(`the transaction can not be executed because its state = '${this._transactionState}'`)
     }
-
-    // process submitted vars and do it before transaction is started in case there are errors
-    this._context.assignVariables( variables )
         
     try {
 
@@ -90,34 +87,27 @@ class TransactionManager {
 
       this._transactionState = 'transact-execute-start'
 
-      const { executionState, results } = await this._context.executeCommands( this._client )
+      const response = await this._context.executeRequest( variables, { client: this._client, output: opts.output } )
      
-      if ( executionState === 'stop' || executionState === 'success' ) {
+      // if the process was stopped or successful, commit the transaction, otherwise roll it back.
+      if ( response.executionState === 'stop' || response.executionState === 'success' ) {
         await this.commitTransaction( ) 
+        this._transactionState = 'transact-execute-commit'
       } else {
         await this.rollbackTransaction( )
+        this._transactionState = 'transact-execute-rollback'
       }
 
-      if ( opts.output === 'allresults') {
-        return { finalState: executionState, results }
-      } else if ( opts.output === 'fullcontext') {
-        return { finalState: executionState, context: this._context }
-      } else {
-        return { finalState: executionState, results: results[results.length-1] }
-      }
-
+      return response 
+      
     } catch ( err ) {
 
       // unhandled exception, try to rollback and then throw the error
       await this.rollbackTransaction( )
+      this._transactionState = 'transact-execute-rollback'
       throw err
 
-    } finally {
-
-      this._transactionState = 'transact-execute-complete'
-      
-    }
-    
+    }     
 
   }  
 

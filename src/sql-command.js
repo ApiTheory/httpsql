@@ -1,17 +1,13 @@
 
 import Ajv from 'ajv'
-import dotty from 'dotty'
-import * as fs from 'fs'
-import path from 'path';
+import jsonata from 'jsonata'
 import { Command } from './command.js'
-import { CommandValidationError, ExpectationFailureError } from './errors.js'
-import { isString, isNumeric, getDirName } from './util.js'
+import { CommandValidationError, ExpectationFailureError, ParameterMappingError, ParameterMappingErrors } from './errors.js'
 import { sqlCommandSchema } from './json-schemas/sql-command-schema.js';
+import { isString, isPlainObject } from './util.js'
 
 const ajv = new Ajv({ allErrors: true, strict: false })
 const sqlCommandValidator = ajv.compile( sqlCommandSchema )
-
-const regex = new RegExp('{([^}]+)}');
 
 export class SqlCommand extends Command {
 
@@ -22,203 +18,154 @@ export class SqlCommand extends Command {
       throw new CommandValidationError( 'the sql command object can not be validated',  sqlCommandValidator.errors )  
     }
 
-    const { sql, ...opts } = command
+    const { sql, ...commandOpts } = command
 
-    super( sql, opts )
+    super( sql, commandOpts )
 
     // params is not required from an input perspective, but default it to an empty array in case not passed
-    this._params = opts.params || []
+    this._params = commandOpts.params || []
     this._executableParams = []
     this._finalizedParams = []
-    this._expect = opts.expect
-    this._onExpectationFailure = opts.onExpectationFailure || 'throw'
-    
-  }
+    this._expect = commandOpts.expect
+    this._onExpectationFailure = commandOpts.onExpectationFailure || 'throw'
 
-  /**
-   * Takes the initially submitted variables for a transaction
-   * and attempts to substitute any in the existing command's params property and
-   * will return an entirely new command property
-   * @param {Object} submittedVariables 
-   */
-  preTransactionVariableSubstitution ( submittedVariables = {} ) {
-    
-    // walks the params for the command and any that are dynamic are compared to the incomming variables and replaced
-    // if command.strict = true and the variable can't be found, an error is thrown.  If the command is not strict, then a null will be put into its place
-    // we want to do this before starting the transaction so we can short circuit any potential errors
-    for( let x = 0; x < this._params.length; x++ ) {
-      
+    // walk the params to make sure they are valid expressions; not checking that they match to anything, just that
+    // they are valid jsonata expression; only test strings because everything else would be a static var
+    const paramErrors = []
+    for ( let x=0; x < this._params.length; x++ ) {
       const param = this._params[x]
-
-      if (  isString(param) ) {
-
-        // see if this is a variable substitution
-        const matchedInside = param.match(regex)
-
-        if ( matchedInside ) {
-          
-          const parts = matchedInside[1]?.split('.')
-
-          if ( parts.length > 1 && ['lastop', 'results'].includes(parts[0].toLowerCase())) {
-            
-            // make sure its not a number before accepting it
-            if ( parts[0].toLowerCase() === 'lastop' && isNumeric(parts[1]) ) {
-              throw new Error(`the dynamic parameter '{${matchedInside[1]}}' is a number` )
-            }
-
-            this._executableParams.push( param )
-
-          } else if ( parts.length === 1 || parts[0].toLowerCase() === 'variable') {
-            
-            const varName = parts[ parts.length - 1 ]
-
-            if ( isNumeric(varName) ) {
-              throw new Error(`the dynamic parameter '{${varName}}' is a number` )
-            }
-
-            const subVal = dotty.get( submittedVariables, varName )
-            
-            if ( subVal !== undefined ) {
-
-              this._executableParams.push( subVal )
-
-            } else {
-
-              // if interpretation is strict, then throw error, otherwise put a null
-              if ( this._strict ) {
-                throw new Error( `parameter '${param}' not found`)
-              } else {
-                this._executableParams.push( null ) 
-              }
-              
-            }
-          
-          } else {
-
-            throw new Error( `dynamic parameter '${param}' can not be properly parsed`)
-
-          }
-        } else {
-          // a static value
-          this._executableParams.push( param )
-
+      if (isString(param)) {
+        try {
+          jsonata( param )
+        } catch ( err ) {
+          paramErrors.push( { index: x, param, message: err.message })
         }
-
-      } else {
-
-        // a static non-string value
-        this._executableParams.push( param )
       }
+    }
 
+    if ( paramErrors.length > 0 ) {
+      throw new ParameterMappingErrors( `dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true`, paramErrors )
     }
 
   }
 
-  /**
-   * Expects current result sets from previous commands.  Will attempt to substitute dynamic parameters with
-   * values from the previous result sets.
-   * @param {*} results 
-   */
-  transactionalResultValueSubstitution( results ) {
-
-    // even if there are no results, need to walk the executable params to make them
-    // finalized.  This will also catch parameters that refer to unknown result values.
-    for ( let x=0; x < this._executableParams.length; x++ ) {
-      
-      const param = this._executableParams[x]
-
-      if (  isString(param) ) {
-        
-        // see if this is a variable substitution
-        const matchedInside = regex.exec( param )
   
-        if ( matchedInside ) {
-          
-          const varName = matchedInside[1]
-          const comparisonObject = { lastop: structuredClone( results[ results.length -1 ] ), results: structuredClone( results ) }
-
-          const subVal = dotty.get( comparisonObject , varName )
-   
-          if ( subVal !== undefined ) {
-  
-            this._finalizedParams.push( subVal )
-  
-          } else {
-  
-            // if interpretation is strict, then throw error, otherwise put a null
-            if ( this._strict ) {
-              throw new Error( `parameter '${param}' not found`)
-            } else {
-              this._finalizedParams.push( null )
-            }
-                
-          }
-  
-        } else {
-          // either static or already substituted as a variable
-          this._finalizedParams.push( param )
-        }
-      
-      } else {
-        // non string param
-        this._finalizedParams.push( param )
-      }
-
-    }
-
-  }
-
-  async execute ( client ) {
+  async execute ( contextSnapshot, opts = {} ) {
     
-    if (!client ) {
-      throw new Error( 'a client is required to execute commands')
+    if (!contextSnapshot ) {
+      throw new Error( 'a contextSnapshot is required to execute the command')
     }
 
-    const result = await client.query( this._command, this._finalizedParams ) 
+    if (!opts.client ) {
+      throw new Error( 'a data client is required to execute the sql command')
+    }
 
+    const finalizedParams = []
+    const parameterErrors = []
+
+    // walk through current params and run them through jsonata evaluation
+    for ( let x=0; x < this._params.length; x++ ) {
+
+      const param = this._params[x]
+      let paramResult
+      try {
+
+        const expression = jsonata( param )
+        paramResult = await expression.evaluate( contextSnapshot )
+        
+        // check strict rules
+        if ( paramResult === undefined && this._strict ) {
+          parameterErrors.push( { index: x, param, message: 'unable to map parameter to an existing value' })
+          paramResult = undefined
+        } else if ( paramResult === undefined && !this._strict ) {
+          paramResult = null
+        }
+
+      } catch ( err ) {
+
+        parameterErrors.push( { index: x, param, message: `error mapping parameter: ${err.message}` })
+        paramResult = undefined
+
+      } finally {
+
+        finalizedParams.push( paramResult)
+
+      }
+
+    } 
+
+    if ( parameterErrors.length > 0 ) {
+      return { 
+        error: new ParameterMappingErrors( `dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true`, parameterErrors ),
+        status: 'parameter-mapping-error', 
+        failureAction: "throw", 
+        finalizedParams 
+      }
+    }
+
+    const result = await opts.client.query( this._command, finalizedParams ) 
     const { rowCount, rows } = result
 
-    if ( this._expect !== undefined && this._expect !== null ) {
+    // go ahead and attempt to match the 
+    if ( this._expect ) {
+      
+      contextSnapshot.currentResult = { rows, rowCount }
 
-      let expectedRowCount, errorMessage
+      const matchText = this._expect.replace(/rows/g, 'currentResult.rows').replace(/rowCount/g, 'currentResult.rowCount')
 
-      if ( this._expect === 'one' ) expectedRowCount = 1
-      else if ( this._expect === 'zero' ) expectedRowCount = 0
-      else if ( isNumeric(this._expect) ) expectedRowCount = this._expect
+      try {
 
-      if ( this._expect === 'many' && result.rowCount < 2 ) {
-        errorMessage = `expected rowCount > 1 but received ${result.rowCount}`
-      } else if ( expectedRowCount !== result.rowCount ) {
-        errorMessage = `expected rowCount = ${expectedRowCount} but received ${result.rowCount}`
-      }
+        const matchExpression = jsonata( matchText )
+        const matchPasses = await matchExpression.evaluate( contextSnapshot )
 
-      if ( errorMessage && this._onExpectationFailure === 'stop' ) {
-
-        return {
-          rows,
-          rowCount,
-          status: 'stop',
-          expectationFailureMessage : errorMessage 
+        if ( !matchPasses ) {
+          throw new ExpectationFailureError( `the expectation: '${this._expect}' failed`, this._expectationDescription)
         }
+        
+      } catch ( err ) {
+        
+        if ( isPlainObject(this.onExpectationFailure)) {
 
-      } else if ( errorMessage && this._onExpectationFailure.message ) {
+          const { message:customMessage, code, ...additionalData } = this.onExpectationFailure
 
-        const { message, code, ...additionalData } = this._onExpectationFailure
-        throw new ExpectationFailureError( message, this._expect, result.rowCount, code, additionalData )
+          return { 
+            rows,
+            rowCount,
+            error: new ExpectationFailureError( customMessage || `the expectation: '${this._expect}' failed`, this._expectationDescription , code, additionalData ),
+            status: 'expectation-failure', 
+            failureAction: 'throw', 
+            finalizedParams 
+          }
 
-      } else if ( errorMessage ) {
+        } else if ( this.onExpectationFailure === 'stop') {
+          // returns rows and rowCount if failure = stop since the value will be valid
+          return { 
+            rows,
+            rowCount,
+            error: err,
+            status: 'expectation-failure', 
+            failureAction: this.onExpectationFailure, 
+            finalizedParams 
+          }
 
-        throw new ExpectationFailureError( errorMessage, this._expect, result.rowCount )
-
+        } else {
+          return { 
+            error: err,
+            status: 'expectation-failure', 
+            failureAction: this.onExpectationFailure, 
+            finalizedParams 
+          }
+        }
       }
+
     }
 
-    return { rowCount, rows, status: 'success' }
+    return { rowCount, rows, status: 'success', finalizedParams }
 
   }
 
-  get type () {
-    return 'sql' 
+  get type() {
+    return 'sql'
   }
 
 }

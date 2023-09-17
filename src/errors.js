@@ -11,16 +11,54 @@ export class CommandValidationError extends Error {
   }
 }
 
+export class ParameterMappingError extends Error {
+  constructor ( message, index ) {
+
+    super( message )
+    this.name = this.constructor.name
+    this.index = index 
+    Error.captureStackTrace(this, this.constructor);
+
+  }
+}
+
+export class ParameterMappingErrors extends Error {
+  constructor ( message, errors =[] ) {
+
+    super( message )
+    this.name = this.constructor.name
+    Error.captureStackTrace(this, this.constructor)
+    this.errors = []
+
+    for( let e of errors) {
+      this.errors.push( {
+        message: e.message,
+        index: e.index
+      })
+    }
+
+  }
+}
+
+export class ExpectationEvaluationError extends Error {
+
+  constructor ( message, expectation ) {
+
+    super( message || 'the expectation could not be evaluated' )
+    this.expectation = expectation
+
+  }
+}
+
 export class ExpectationFailureError extends Error {  
   
-  constructor ( message, expected, received, code, additionalData ) {
+  constructor ( message, expected, code, additionalData ) {
 
     super( message )
 
     this.name = this.constructor.name
 
     this.expected = expected
-    this.received = received
     this.code = code
     this.additionalData = additionalData
 

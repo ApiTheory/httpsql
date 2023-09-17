@@ -32,7 +32,7 @@ const commands = [
 const r = new Root( commands )
 const t = new TransactionManager( client, r )
 
-const result = await t.executeTransaction( { status: "active", name : "apitheory" } )
+const result = await t.executeTransaction()
 
 console.log( '== 01.create-table results ===================================================')
 console.log( result )

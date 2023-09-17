@@ -12,7 +12,7 @@ export const sqlCommandSchema = {
         type: "array",
         items: [ { type: [ "integer", "string", "number", "boolean", "null", "array", "object" ]} ]
       },
-      expect: { type: "string", enum : [ "zero", "one", "oneormany", "many" ] },
+      expect: { type: "string" },
       onExpectationFailure : { type: ["string", "object"] }
     },
     required : [ "sql" ],

@@ -1,7 +1,7 @@
 import { SqlCommand } from '../src/sql-command.js';
 import { expect } from 'chai'
 import sinon from 'sinon'
-import { ExpectationFailureError } from '../src/errors.js'
+import { ExpectationFailureError, ParameterMappingErrors } from '../src/errors.js'
 
 const basicSqlCommand = {
   sql: 'SELECT * FROM table'
@@ -24,7 +24,7 @@ describe('SqlCommand', () => {
     expect(c._finalizedParams).deep.equal([])
     expect(c._expect).undefined
     expect(c.command).equal(basicSqlCommand.sql)
-    expect(c.strict).false
+    expect(c.strict).true
     expect(c.name).undefined
     expect(c.description).undefined
     expect(c.id).to.be.ok
@@ -44,13 +44,13 @@ describe('SqlCommand', () => {
   })
 
   it('should populate expect', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ expect : 'one' } } )
-    expect(c._expect).equal('one')
+    const c = new SqlCommand( { ...basicSqlCommand, ...{ expect : 'rowCount=1' } } )
+    expect(c._expect).equal('rowCount=1')
   })
 
   it('should populate params', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [1, '{lastop.rowCount}'] } } )
-    expect(c._params).deep.equal([1, '{lastop.rowCount}'])
+    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [1, 'lastop.rowCount'] } } )
+    expect(c._params).deep.equal([1, 'lastop.rowCount'])
   })
 
   it('should throw if appropriate command not passed', () => {
@@ -59,69 +59,62 @@ describe('SqlCommand', () => {
     }).to.throw('the sql command object can not be validated')
   })
 
-  it('executable command array should match params array if no vars submitted', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{lastop.rows.1.name}'] } } )
-    //c.preTransactionVariableSubstitution( { id: 5, name: 'testname' })
-    c.preTransactionVariableSubstitution()
-    expect(c._executableParams).deep.equal([ 1, '{lastop.rows.1.name}'])
-    expect(c._params).deep.equal([ 1, '{lastop.rows.1.name}'])
-    expect(c._finalizedParams).deep.equal([])
+  it('should throw if bad param passed', () => {
+    let thrown = false
+    try {
+      new SqlCommand( { sql: 'SELECT * FROM table', params : ['id', 'test===1']} )
+    } catch ( err ) {
+      thrown = true
+      expect(err.message).equal('dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true')
+      expect(Array.isArray(err.errors)).true
+      expect(err.errors.length).equal(1)
+      expect(err.errors[0].index).equal(1)
+      expect(err.errors[0].message).equal('The symbol "=" cannot be used as a unary operator')
+    }
+    
+    expect(thrown).true
   })
 
-  it('executable command array should properly represent substituted variables', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, 'testval', '{variable.status}', '{name}', '{lastop.rows.1.name}'] } } )
-    c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-    expect(c._executableParams).deep.equal([ 1, 'testval', 'active', 'testname', '{lastop.rows.1.name}'])
-    expect(c._params).deep.equal([ 1, 'testval', '{variable.status}', '{name}', '{lastop.rows.1.name}'])
-    expect(c._finalizedParams).deep.equal([])
-  })
-
-  it('executable command array should substitute null if not strict and variable not found', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, 'testval', '{variable.status}', '{name}', '{lastop.rows.1.name}'] } } )
-    c.preTransactionVariableSubstitution( { id: 5, name: 'testname' })
-    expect(c._executableParams).deep.equal([ 1, 'testval', null, 'testname', '{lastop.rows.1.name}'])
-    expect(c._params).deep.equal([ 1, 'testval', '{variable.status}', '{name}', '{lastop.rows.1.name}'])
-    expect(c._finalizedParams).deep.equal([])
-  })
-
-  it('should throw if a dynamic parameter variable is a number', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{variable.status}', '{7}', '{lastop.rows.1.name}'] } } )
-    expect(() => {
-      c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-    }).to.throw(`the dynamic parameter '{7}' is a number`)
-  })
-
-  it('should throw if a dynamic parameter lastop is a number', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{variable.status}', '{lastop.3}'] } } )
-    expect(() => {
-      c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-    }).to.throw(`the dynamic parameter '{lastop.3}' is a number`)
-  })
-
-  it('should not throw if the 2nd element of dynamic parameter results is a number', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{variable.status}', '{results.99}'] } } )
-    c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-  })
-
-  
-  it('should throw if a dynamic parameter result is not properly named', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ params: [ 1, '{variable.status}', '{badvar.test}'] } } )
-    expect(() => {
-      c.preTransactionVariableSubstitution( { id: 5, name: 'testname', status: 'active' })
-    }).to.throw(`dynamic parameter '{badvar.test}' can not be properly parsed`)
-  })
-
-  it('should throw if strict and a dynamic parameter variable can not be aligned with something passed', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ strict: true, params: [ 1, '{variable.status}' ] } } )
-    expect(() => {
-      c.preTransactionVariableSubstitution( { id: 5, name: 'testname' })
-    }).to.throw(`parameter '{variable.status}' not found`)
-  })
 
   describe('execute method', () => {
     
   
-  
+    it('should throw if 2nd argument not passed', async () => {
+      
+      const c = new SqlCommand( { sql : 'select * from test' } )
+      
+      let thrown = false
+
+      try {
+        await c.execute( {})
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(Error)
+        expect(e.message).to.equal('a data client is required to execute the sql command')
+      }
+
+      expect(thrown).to.equal(true)
+
+    })
+
+    it('should throw if 2nd argument does not have client', async () => {
+      
+      const c = new SqlCommand( { sql : 'select * from test' } )
+      
+      let thrown = false
+
+      try {
+        await c.execute( {}, {})
+      } catch(e) {
+        thrown = true
+        expect(e).to.be.an.instanceOf(Error)
+        expect(e.message).to.equal('a data client is required to execute the sql command')
+      }
+
+      expect(thrown).to.equal(true)
+
+    })
+
     it('should throw if client not passed as argument', async () => {
       
       const c = new SqlCommand( { sql : 'select * from test' } )
@@ -133,7 +126,7 @@ describe('SqlCommand', () => {
       } catch(e) {
         thrown = true
         expect(e).to.be.an.instanceOf(Error)
-        expect(e.message).to.equal('a client is required to execute commands')
+        expect(e.message).to.equal('a contextSnapshot is required to execute the command')
       }
 
       expect(thrown).to.equal(true)
@@ -154,7 +147,7 @@ describe('SqlCommand', () => {
       let thrown = false
 
       try {
-        await c.execute( clientMock)
+        await c.execute( {}, { client: clientMock} )
       } catch(e) {
         thrown = true
         expect(e).to.be.an.instanceOf(Error)
@@ -176,18 +169,17 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'many' } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount > 1' } )
       
       let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount > 1 but received 1')
-      }
+    
+      const response = await c.execute( {}, { client: clientMock} )
 
-      expect(thrown).to.equal(true)
+      expect( response.status).equal('expectation-failure')
+      expect( response.error).instanceOf(ExpectationFailureError)      
+      expect( response.error.message).equal(`the expectation: 'rowCount > 1' failed`)      
+      expect( response.failureAction).equal('throw')
+      expect( response.finalizedParams).deep.equal([])
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
@@ -203,21 +195,104 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'one' } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount = 1' } )
       
       let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 1 but received 0')
-      }
+      const response = await c.execute( {}, { client: clientMock })
 
-      expect(thrown).to.equal(true)
+      expect( response.status).equal('expectation-failure')
+      expect( response.error).instanceOf(ExpectationFailureError)      
+      expect( response.error.message).equal(`the expectation: 'rowCount = 1' failed`)      
+      expect( response.failureAction).equal('throw')
+      expect( response.finalizedParams).deep.equal([])
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
+
+    })
+
+    
+
+    it('successfully processes vars', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id']} )
+      
+      const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
+
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test where id = $1', [1] ])
+      expect( response.finalizedParams[0]).equal(1)
+
+    })
+
+
+    it('var not found and strict = false', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id1'], strict: false } )
+      
+      const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
+      console.log( response )
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test where id = $1', [null] ])
+      expect( response.finalizedParams[0]).equal(null)
+
+    })
+
+    it('var not found and strict = true', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id1'], strict: true } )
+      
+      const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
+
+      expect(clientMockQuery.calledOnce).to.equal(false)
+      expect( response.finalizedParams[0]).equal(undefined)
+      expect( response.status).equal('parameter-mapping-error')
+      expect( response.failureAction).equal('throw')
+      expect( response.error).instanceOf(ParameterMappingErrors)
+      expect( response.error.message).equal('dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true')
+
+    })
+
+    it('var not found and strict = undefined', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id1'] } )
+      
+      const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
+
+      expect(clientMockQuery.calledOnce).to.equal(false)
+      expect( response.finalizedParams[0]).equal(undefined)
+      expect( response.status).equal('parameter-mapping-error')
+      expect( response.failureAction).equal('throw')
+      expect( response.error).instanceOf(ParameterMappingErrors)
+      expect( response.error.message).equal('dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true')
 
     })
 
@@ -230,52 +305,22 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'one' } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount=1' } )
       
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 1 but received 2')
-      }
-
-      expect(thrown).to.equal(true)
+      const response = await c.execute( {}, { client: clientMock })
+      expect( response.status).equal('expectation-failure')
+      expect( response.error).instanceOf(ExpectationFailureError)      
+      expect( response.error.message).equal(`the expectation: 'rowCount=1' failed`)      
+      expect( response.failureAction).equal('throw')
+      expect( response.finalizedParams).deep.equal([])
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
 
     })
 
-    it('client.query 2 rows and rowCount successfully but match for zero', async () => {
-      
-      const clientMock = {
-        id: 'testClient',
-        query: async (sql, params) => { return Promise.resolve( {rowCount : 2, rows: [{id:1} , {id: 2}]}) }
-      }
-    
-      const clientMockQuery = sinon.spy(clientMock, 'query' )
-    
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'zero' } )
-      
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 0 but received 2')
-      }
 
-      expect(thrown).to.equal(true)
-      expect(clientMockQuery.calledOnce).to.equal(true)
-      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
-
-
-    })
-
-    it('client.query 1 rows and rowCount successfully but match for zero', async () => {
+    it('onExpectationFailure STOP', async () => {
       
       const clientMock = {
         id: 'testClient',
@@ -284,25 +329,23 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'zero' } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount=2', onExpectationFailure: 'stop' } )
       
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 0 but received 1')
-      }
-
-      expect(thrown).to.equal(true)
+      const result = await c.execute( {}, { client:clientMock} )
+      expect(result.rows).to.deep.equal([ { id: 1 } ] )
+      expect(result.rowCount).to.equal( 1)
+      expect(result.failureAction).to.equal('stop')
+      expect(result.finalizedParams).deep.equal([])
+      expect(result.status).equal('expectation-failure')
+      expect(result.error.message).equal(`the expectation: 'rowCount=2' failed`)
+      expect(result.error).to.be.instanceOf(ExpectationFailureError)
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
 
     })
 
-    it('client.query 1 rows and rowCount successfully but match for NUMERIC zero', async () => {
+    it('onExpectationFailure = custom message', async () => {
       
       const clientMock = {
         id: 'testClient',
@@ -311,25 +354,25 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 0 } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount=5', onExpectationFailure: { message : 'just say something special', code: 't555', foo: 'bar' } } )
       
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 0 but received 1')
-      }
-
-      expect(thrown).to.equal(true)
+      const result = await c.execute( {}, { client:clientMock })
+      console.log(result)
+      expect(result.rows).to.deep.equal([ { id: 1 } ] )
+      expect(result.rowCount).to.equal( 1)
+      expect(result.failureAction).to.equal('throw')
+      expect(result.finalizedParams).deep.equal([])
+      expect(result.status).equal('expectation-failure')
+      expect(result.error.message).equal('just say something special')
+      expect(result.error.code).equal('t555')     
+      expect(result.error.additionalData).deep.equal( { foo: 'bar' } )  
+      expect(result.error).to.be.instanceOf(ExpectationFailureError)
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
-
     })
 
-    it('client.query 1 rows and rowCount successfully but match for 1000', async () => {
+    it('onExpectationFailure = custom message without the message', async () => {
       
       const clientMock = {
         id: 'testClient',
@@ -338,69 +381,19 @@ describe('SqlCommand', () => {
     
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000 } )
+      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount=5', onExpectationFailure: { code: 't555', foo: 'bar' } } )
       
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('expected rowCount = 1000 but received 1')
-      }
+      const result = await c.execute( {}, { client:clientMock })
 
-      expect(thrown).to.equal(true)
-      expect(clientMockQuery.calledOnce).to.equal(true)
-      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
-
-
-    })
-
-    it('client.query 1 rows and rowCount successfully but match for 1000 and onExpectationFailure STOP', async () => {
-      
-      const clientMock = {
-        id: 'testClient',
-        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
-      }
-    
-      const clientMockQuery = sinon.spy(clientMock, 'query' )
-    
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000, onExpectationFailure: 'stop' } )
-      
-      const result = await c.execute( clientMock)
-      expect(result).to.deep.equal({
-        rows: [ { id: 1 } ],
-        rowCount: 1,
-        status: 'stop',
-        expectationFailureMessage: 'expected rowCount = 1000 but received 1'
-      })
-      expect(clientMockQuery.calledOnce).to.equal(true)
-      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
-
-
-    })
-
-    it('client.query 1 rows and rowCount successfully but match for 1000 and onExpectationFailure = custom message', async () => {
-      
-      const clientMock = {
-        id: 'testClient',
-        query: async (sql, params) => { return Promise.resolve( {rowCount : 1, rows: [{id:1} ]}) }
-      }
-    
-      const clientMockQuery = sinon.spy(clientMock, 'query' )
-    
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 1000, onExpectationFailure: { message : 'just say something special', code: 't555' } } )
-      
-      let thrown = false
-      try {
-        await c.execute( clientMock)
-      } catch(e) {
-        thrown = true
-        expect(e).to.be.an.instanceOf(ExpectationFailureError)
-        expect(e.message).to.equal('just say something special')
-      }
-
-      expect(thrown).to.equal(true)
+      expect(result.rows).to.deep.equal([ { id: 1 } ] )
+      expect(result.rowCount).to.equal( 1)
+      expect(result.failureAction).to.equal('throw')
+      expect(result.finalizedParams).deep.equal([])
+      expect(result.status).equal('expectation-failure')
+      expect(result.error.message).equal(`the expectation: 'rowCount=5' failed`)
+      expect(result.error.code).equal('t555')     
+      expect(result.error.additionalData).deep.equal( { foo: 'bar' } )  
+      expect(result.error).to.be.instanceOf(ExpectationFailureError)
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
@@ -416,8 +409,8 @@ describe('SqlCommand', () => {
       const clientMockQuery = sinon.spy(clientMock, 'query' )
     
       const c = new SqlCommand( { sql : 'SELECT * FROM test' } )
-      const result = await c.execute( clientMock)
-      expect(result).to.deep.equal({ rowCount: 1, rows: [ { id: 1 } ], status: 'success' })
+      const result = await c.execute( {}, { client: clientMock })
+      expect(result).to.deep.equal({ rowCount: 1, rows: [ { id: 1 } ], status: 'success', finalizedParams: [] })
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test', [] ])
 
@@ -425,50 +418,6 @@ describe('SqlCommand', () => {
 
   })
 
-  describe('transactionalResultValueSubstitution', () => {
-
-    const results = [
-      {
-        status: 'success',
-        rowCount : 1,
-        rows: [ { id: 1, name: 'test1' } ]
-      },
-      { status: 'success' },
-      {
-        status: 'success',
-        rowCount : 2,
-        rows: [ { id: 1, name: 'test1' }, { id: 2, name: 'test2' } ]
-      }
-    ]
-
-    it( 'will complete with correct substitutions', () => {
-      
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.0.id}', '{results.0.rows.0.name}'] } )
-      // status willl have been filled in during variable substitution - shouldnt really be part of test, but using it as an example
-      c._executableParams = [ 1, 'active', '{lastop.rows.0.id}', '{results.2.rows.1.name}']
-      c.transactionalResultValueSubstitution( results )
-      expect(c._finalizedParams).to.deep.equal([ 1, 'active', 1, 'test2' ])
-
-    })
-
-    it( 'will replace null if dynamic param not correct if strict=false', () => {
-      
-      const c = new SqlCommand( { sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.1.id}', '{results.0.rows.5.name}'] } )
-      c._executableParams = [ 1, 'active', '{lastop.rows.1.id}', '{results.2.rows.5.name}']
-      c.transactionalResultValueSubstitution( results )
-      expect(c._finalizedParams).to.deep.equal([ 1, 'active', 2, null ])
-
-    })
-
-    it( 'will throw if dynamic param not correct and strict=true', () => {
-      
-      const c = new SqlCommand( { strict: true, sql : 'SELECT * FROM test', params : [1, '{status}', '{lastop.rows.1.id}', '{results.0.rows.5.name}'] } )
-      c._executableParams = [ 1, 'active', '{lastop.rows.1.id}', '{results.2.rows.5.name}']
-
-      expect(() => c.transactionalResultValueSubstitution( results )).to.throw(`parameter '{results.2.rows.5.name}' not found`)
-
-    })
-
-  })
+ 
 
 })

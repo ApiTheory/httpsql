@@ -1,13 +1,14 @@
 import { DatabaseError } from 'pg-protocol'
 import { Root } from "./root.js"
-import { ExpectationFailureError } from './errors.js'
+import { ExpectationFailureError, LogicOpFailureError } from './errors.js'
+import { arrayToObject} from './util.js'
 
 export class Context {
 
   constructor( rootNode ) {
 
     if ( !(rootNode instanceof Root) ) {
-      throw new Error('root must be an instance of Root')
+      throw new Error('rootNode argument must be an instance of Root')
     }
 
     this._rootNode = rootNode
@@ -16,227 +17,186 @@ export class Context {
     this._results = []
     this._variables
     this._transactionExecuted
-
+    this._request
+    this._requestIsPrepared = false
   }
 
- 
-  /**
-   * Attempts to process variables and conduct substitution in
-   * the commands.  Will throw errors for missing vars so the
-   * transaction won't even begin if there are var errors
-   * @param {*} submittedVariables 
-   * @returns 
-   */
-  assignVariables( submittedVariables = [] ) {
+  async executeRequest( vars, opts = {} ) {
 
-    this._variables = submittedVariables || []
-
-    if ( this._variables.length === 0 ) return
-
-    this._rootNode.commands.filter((c) => c.type === 'sql').forEach(( command, idx ) => {
-      try {
-        command.preTransactionVariableSubstitution( structuredClone( this._variables ) )
-      } catch ( err ) {
-        err.message= `variable assignment failure on command ${idx}: ${err.message}`
-        throw err
-      }
-    });
-
-  }
-
-  async executeCommands( client ) {
-
-    if (!client ) {
-      throw new Error( 'a client is required to execute commands')
-    }
+    this._variables = vars || {} 
+    this._request = opts?.request || {}
+    const client = opts?.client
 
     if ( this._executionState !== 'not-started' ) {
-      throw new Error( `The context can only execute commands one time.  The current transactionState === '${this._executionState}'`)
+      throw new Error( `the context can only execute commands one time but the current executionState === '${this._executionState}'`)
     }
 
     if ( this._rootNode.commands.length === 0 ) {
-      return { executionState: 'nothing-to-do', results: [] }
+      this._executionState = 'nothing-to-do'
+      this._results = []
+      return
     }
 
     // walk through each of the commands
     let stopProcessing = false
     
     this._executionState = 'started'
+    const transactionStart = Date.now()
+    const overallStartTime = process.hrtime.bigint()
 
     for ( let idx=0; idx < this._rootNode.commands.length; idx++ ) {
 
-      if ( stopProcessing ) {
-        this._results.push( {
-          status: 'not-executed'
-        })
-        continue
+      const currentExecution = { 
+        currentResult : {
+          index : idx,
+          status: 'not-executed',
+          ts: Date.now()
+        },
+        command: null
       }
 
       const currentCommand = this._rootNode.commands[idx]
-      
-      if ( currentCommand.type === 'sql' ) {
+
+      const currentResult = {
+        type: currentCommand.type,
+        status: 'not-executed',
+        command: currentCommand,
+        commandStart : Date.now()
+      }
+
+      // if processing should stop, capture the result as not executed and move back to top of the loop to process everything else
+      if ( stopProcessing ) {
+        this._results.push( currentResult )
+        continue
+      }
+
+      const currentContextSnapshot = new ContextSnapshot( this )
+
+      const startTs = process.hrtime.bigint()
+
+      try {
+
+        const executionOptions = {}
+        if (  client ) {
+          executionOptions.client = client
+        }
+
+        const { rowCount, rows, value, status, finalizedParams, failureAction, error } = await currentCommand.execute( currentContextSnapshot.generateContext(), executionOptions )
         
-        try {
-          
-          // need to have a snapshot of the results and not the real results otherwise those will just change on every iteration
-          currentCommand.transactionalResultValueSubstitution( structuredClone( this._results ) )
-
-        } catch ( err ) {
-          
-          this._results.push ( {
-            status: 'dynamicParameterAssignmentFailure',
-            failureAction : 'throw' ,
-            errorMessage: err.message,
-            error : err
-          })
-
-          err.message= `transactional result value assignment failure occurred at command index ${idx}: ${err.message}`
-          
-          stopProcessing = true
-          this._executionState = "error"
-
-        }
-
-        if ( stopProcessing ) continue;
-
-        const startTs = process.hrtime.bigint()
-        let result = {}
-
-        try {
-
-          const { rowCount, rows, status } = await currentCommand.execute( client )
-          
-          if ( status === 'stop' ) {
-            this._executionState = 'stop'
-            stopProcessing = true
-            result = {
-              status: 'expectation-failure',
-              failureAction : 'stop',
-              rowCount,
-              rows
-            }
-          } else {
-            result = {
-              status: 'success',
-              rowCount,
-              rows
-            }
-          }
-
-        } catch ( err ) {
-
-          if ( err instanceof DatabaseError ) {
-
-            result = {
-              status: 'database-failure',
-              failureAction : 'throw' ,
-              errorMessage: err.message,
-              error : err
-            }
-
-            err.message = `database error occured at command index ${idx}: ${err.message}`
-            
-
-          } else if ( err instanceof ExpectationFailureError ) {
-
-            err.message = `expectation failure occured at command index ${idx}: ${err.message}`
-            
-            result = {
-              status: 'expectation-failure',
-              failureAction : 'throw' ,
-              error : err
-            }
-
-          } else {
-
-            result = {
-              status: 'unhandled-exception',
-              failureAction : 'throw' ,
-              error : err
-            }
-
-          }
-
-          stopProcessing = true
-          this._executionState = 'error'
-
-        } finally {
-
-          result.ts = Date.now()
-          result.executionTime = (( process.hrtime.bigint() - startTs )/ BigInt(1000000)).toString()
-
-          this._results.push ( result )
-
-        }
-
-      } else {
+        currentResult.status = status
         
-        const startTs = process.hrtime.bigint()
-        let result
+        if (rowCount !== undefined ) {
+          currentResult.rowCount = rowCount
+        }
+        
+        if ( rows !== undefined) {
+          currentResult.rows = rows
+        }
+        
+        if ( value !== undefined ) {
+          currentResult.value = value
+        }
 
-        try {
+        if ( finalizedParams ) {
+          currentResult.command.finalizedParams = finalizedParams
+        }
 
-          const { status } = await currentCommand.execute( structuredClone(this._results) )
-          
-          if ( status === 'stop' ) {
-            
-            result = {
-              status: 'logic-failure',
-              failureAction : 'stop'
-            }
+        if ( error !== undefined ) {
+          currentResult.error = error
+        }
 
-            this._executionState = 'stop'
-            stopProcessing = true
-
-          } else {
-
-            result = {
-              status: 'success'
-            }
-
-          }
-          
-          
-
-        } catch ( err ) {
-
-          result = {
-            status: 'logic-failure',
-            failureAction : 'throw' ,
-            errorMessage: err.message,
-            error : err
-          }
-          
-          err.message = `logic failure occured at command index ${idx}: ${err.message}`
-          
+        if ( currentResult.status !== 'success' ) {
           stopProcessing = true
-          this._executionState = "error"
+          this._executionState = currentResult.status
+          if ( failureAction ) currentResult.failureAction = failureAction
+        }
 
-        } finally {
-          
-          result.ts = Date.now()
-          result.executionTime = (( process.hrtime.bigint() - startTs )/ BigInt(1000000)).toString()
-          this._results.push ( result )
+      } catch ( err ) {
+
+        if ( err instanceof DatabaseError ) {
+
+          currentResult.failureAction = 'throw'
+          currentResult.status = 'database-execution-failure'
+          currentResult.error = err
+
+        } else if ( err instanceof ExpectationFailureError ) {
+
+          currentResult.failureAction = 'throw'
+          currentResult.status = 'expectation-failure'
+          currentResult.error = err
+
+        } else if ( err instanceof LogicOpFailureError ) {
+
+          currentResult.failureAction = 'throw'
+          currentResult.status = 'logic-execution-failure'
+          currentResult.error = err
+
+        } else {
+
+          currentResult.failureAction = 'throw'
+          currentResult.status = 'unhandled-exception'
+          currentResult.error = err
 
         }
+
+        stopProcessing = true
+        this._executionState = 'error'
+
+      } finally {
+
+        currentResult.commandEnd = Date.now()
+        currentResult.totalExecutionMS = (( process.hrtime.bigint() - startTs )/ BigInt(1000000)).toString()
+        this._results.push( currentResult )
 
       }
+
     }
 
+    // no more commands to process, so figure out what the execution result is if it has not already
+    // been set to 'stop' or to 'error
     if ( this._executionState !== 'stop' && this._executionState !== 'error' ) {
       this._executionState = this._results[this._results.length-1].status
     }
-    
-    return { executionState: this._executionState, results: this._results }
+
+    const response = {
+      transactionId : this._rootNode.id,
+      executionState: this._executionState,
+      transactionStart,
+      transactionEnd: Date.now(),
+      totalExecutionMS: (( process.hrtime.bigint() - overallStartTime )/ BigInt(1000000)).toString()
+    }
+
+    if ( opts.output === 'last-result') {
+      response.lastResult = this._results[this._results.length - 1]
+    } else if ( opts.output === 'last-data-result') {
+      response.lastDataResult = this._results.toReversed().find( x => x.type === 'sql' )  
+    } else if ( opts.output === 'last-logic-result') {
+      response.lastLogicResult = this._results.toReversed().find( x => x.type === 'logic' )        
+    } else if ( opts.output === 'full-context') {
+      const finalSnapshot = new ContextFinalSnapshot(this)
+      response.fullContext = finalSnapshot.generateContext()
+    } else {
+      response.results = this._results
+    }
+
+    return response
 
   }
 
   get results() {
-    return this._results
+    return structuredClone( this._results )
   }
 
   get commands() {
-    return this._rootNode.commands
+    return structuredClone(this._rootNode.commands )
+  }
+
+  get variables() {
+    return this._variables
+  }
+
+  get request() {
+    return this._request
   }
 
   get executionState() {
@@ -247,4 +207,60 @@ export class Context {
     this._executionState = state
   }
 
+}
+
+export class ContextSnapshot {
+
+  constructor ( context ) {
+    this._id = context.id
+    this._results = context.results
+    this._executionState = context.executionState
+    this._commands = context.commands
+    this._variables = context.variables
+    this._request = context.request
+  }
+
+  generateContext() {
+   
+    const ct = {
+      id : this._id,
+      executionState: this._executionState,
+      resultById : arrayToObject( this._results, 'id' ),
+      resultByName : arrayToObject( this._results, 'name' ),
+      lastTransformationResult : this._results.toReversed().find( x => x.type === 'transform' ) ,
+      lastLogicResult : this._results.toReversed().find( x => x.type === 'logic' ) ,
+      lastDataResult : this._results.toReversed().find( x => x.type === 'sql' ) ,
+      lastResult : this._results.length > 0 ? this._results[this._results.length-1] : null,
+      request : this._request,
+      results : this._results,
+      variables : this._variables
+    }
+
+    return ct
+
+  }
+
+}
+
+export class ContextFinalSnapshot {
+
+  constructor ( context ) {
+    this._results = context.results
+    this._commands = context.commands
+    this._variables = context.variables
+    this._request = context.request
+  }
+
+  generateContext() {
+   
+    const ct = {
+      request : this._request,
+      variables : this._variables,
+      results : this._results,
+      commands : this._commands
+    }
+
+    return ct
+
+  }
 }
