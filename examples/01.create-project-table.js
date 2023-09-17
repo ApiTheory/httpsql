@@ -34,7 +34,7 @@ const t = new TransactionManager( client, r )
 
 const result = await t.executeTransaction()
 
-console.log( '== 01.create-table results ===================================================')
+console.log( '== 01.create-projects-table results ===================================================')
 console.log( result )
 console.log( '===============================================================================')
 
