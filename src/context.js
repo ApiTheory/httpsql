@@ -1,4 +1,4 @@
-import { DatabaseError } from 'pg-protocol'
+import { DatabaseError } from "./errors.js"
 import { Root } from "./root.js"
 import { ExpectationFailureError, LogicOpFailureError } from './errors.js'
 import { arrayToObject} from './util.js'
@@ -179,6 +179,10 @@ export class Context {
       response.results = this._results
     }
 
+    if ( response.executionState !== 'success' ) {
+      response.errorMessage = this._results.toReversed().find( x =>  x.error  )?.error.message
+    }
+
     return response
 
   }
@@ -258,6 +262,7 @@ export class ContextFinalSnapshot {
       variables : this._variables,
       results : this._results,
       commands : this._commands
+      
     }
 
     return ct
