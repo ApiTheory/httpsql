@@ -13,8 +13,8 @@ r.addCommand(
      "sql": "INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;",
      "name": "insert-project-1",
      "strict" : true,
-     "params" : [ '{newId}', '{newName}', '{newStatus}'],
-     "expect" : "one",
+     "params" : [ 'variables.newId', 'variables.newName', 'variables.newStatus'],
+     "expect" : "rowCount=1",
      "onExpectationFailure" : "stop"
  })
 
@@ -24,8 +24,8 @@ r.addCommand(
      "sql": "SELECT id, status, name FROM projects WHERE id = $1;",
      "name": "get-project",
      "strict" : true,
-     "params" : ['{lastop.rows.0.id}'],
-     "expect" : "one",
+     "params" : ['lastDataResult.rows[0].id'],
+     "expect" : "rowCount=1",
      "onExpectationFailure" : "stop"
  })
 
@@ -34,7 +34,7 @@ r.addCommand(
  { 
     "name" : 'check-if-frozen',
     "purpose" : 'if frozen, the status can not be changed',
-    "logicOp": {"!==" : ["frozen", {"var" : "lastOp.rows.0.status"}]}
+    "logicOp": "lastDataResult.rows[0].status != 'frozen'"
  })
 
  // update the record - note that it will return the new record without running another query
@@ -43,8 +43,8 @@ r.addCommand(
   { 
     "name" : 'update-project',
     "sql": "UPDATE projects SET name = $2, status = $3 WHERE id = $1 RETURNING *;",
-    "params" : ['{results.0.rows.0.id}', "{updatedName}", "{updatedStatus}"],
-    "expect" : "one"
+    "params" : ['results[1].rows[0].id', "variables.updatedName", "variables.updatedStatus"],
+    "expect" : "rowCount=1"
 })
  
 
@@ -56,12 +56,10 @@ const updateResults = await t.executeTransaction( {
   newStatus: "completed", 
   updatedName: "mars launch", 
   updatedStatus: 'sometime soon' 
-}, { output : "fullcontext" } )
+}, { output : "full-context" } )
 
 console.log( '== 05.fetch-update-validate results ===========================================')
-console.log( updateResults )
-console.log( updateResults.context.results )
-
+console.log( updateResults.fullContext.results )
 console.log( '===============================================================================')
 
 client.release()

@@ -21,8 +21,8 @@ const r = new Root()
 r.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;`,
     name: "insert-project-1",
-    params : [ '{id}', '{name}', '{status}'],
-    expect: "one"
+    params : [ 'variables.id', 'variables.name1', 'variables.status'],
+    expect: "rowCount=1"
 })
 
 // attempt to insert a new project with the same ID as the previous one
@@ -30,18 +30,17 @@ r.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ($1, $2, $3 ) RETURNING *;`,
     name: "insert-project-2",
     strict: false,
-    params : [ '{lastop.rows.0.id}', '{variable.name}', '{status}'],
-    expect: "one"
+    params : [ 'lastDataResult.rows[0].id', 'variables.name', 'status'],
+    expect: "rowCount=1"
 })
 
 const t = new TransactionManager( client, r )
 
 // requesting the full context - usually only necessary for debugging
-const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name : "my private project" }, {output: 'fullcontext' } )
+const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" }, {output: 'full-context' } )
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
 console.log( createProjectFailureResults )
-console.log( createProjectFailureResults.context.results )
 console.log( '===============================================================================')
 
 client.release()

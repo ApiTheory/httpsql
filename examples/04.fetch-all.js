@@ -11,10 +11,10 @@ r.addCommand({ name: 'fetch-all', sql: 'SELECT * FROM projects;' })
 
 const t = new TransactionManager( client, r )
 
-const queryResults = await t.executeTransaction( )
+const response = await t.executeTransaction( )
 
 console.log( '== 04.fetch-all results =======================================================')
-console.log( queryResults.results.rows )
+console.log( response.results[0].rows )
 console.log( '===============================================================================')
 
 client.release()
