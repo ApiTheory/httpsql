@@ -1,8 +1,6 @@
-import { LogicEngine } from 'json-logic-engine'
 import { LogicCommand } from '../src/logic-command.js'
 import { ExpectationFailureError, LogicOpFailureError } from '../src/errors.js'
 import { expect } from 'chai'
-import sinon from 'sinon'
 
 const basicLogicCommand = {
   logicOp : 'test=1'
@@ -89,9 +87,9 @@ describe('LogicCommand', () => {
       
     })
 
-    it('returns an exception if logic fails against context without onExpectationFailure set', async () => {
+    it('returns an exception if logic fails against context and onExpectationFailure not set', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2' } )
+      const c = new LogicCommand( { logicOp : 'variables.id=2'} )
       const response = await c.execute( { variables : { id : 1 } })
 
       expect(response.error).instanceOf(ExpectationFailureError)
@@ -103,6 +101,25 @@ describe('LogicCommand', () => {
       expect(response.failureAction).equals( 'throw')
       
     })
+
+    it('returns an exception if logic fails against context and onExpectationFailure set to throw', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure: 'throw'} )
+      const response = await c.execute( { variables : { id : 1 } })
+
+      expect(response.error).instanceOf(ExpectationFailureError)
+      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.code).undefined
+      expect(response.error.additionalData).undefined
+
+      expect(response.status).equals( 'expectation-failure')
+      expect(response.failureAction).equals( 'throw')
+      
+    })
+
+  
+
+   
 
   })
  
