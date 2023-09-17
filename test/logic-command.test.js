@@ -38,17 +38,17 @@ describe('LogicCommand', () => {
     
       const c = new LogicCommand( { logicOp : 'variables.id=1'} )
       const response = await c.execute( { variables : { id : 1 } })
-      expect(response).deep.equals({ status: 'success' })
+      expect(response).deep.equals({ result: true, status: 'success' })
       
     })
 
     it('returns a stop execution if logic fails against context', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : 'stop'} )
+      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : 'stop', expect: 'currentResult=true'} )
       const response = await c.execute( { variables : { id : 1 } })
 
       expect(response.error).instanceOf(ExpectationFailureError)
-      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.message).equals(`the logic operation 'variables.id=2' expectation 'currentResult=true' failed`)
       expect(response.error.code).undefined
       expect(response.error.additionalData).undefined
 
@@ -59,7 +59,7 @@ describe('LogicCommand', () => {
 
     it('returns a custom message if logic fails against context', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : { message: 'something is up', code:'test1', foo:'bar' }} )
+      const c = new LogicCommand( { logicOp : 'variables.id=2', expect: 'currentResult=true', onExpectationFailure : { message: 'something is up', code:'test1', foo:'bar' }} )
       const response = await c.execute( { variables : { id : 1 } })
 
       expect(response.error).instanceOf(ExpectationFailureError)
@@ -74,11 +74,11 @@ describe('LogicCommand', () => {
 
     it('returns a custom message without a message if logic fails against context', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : { code:'test1', foo:'bar' }} )
+      const c = new LogicCommand( { logicOp : 'variables.id=2', expect : 'currentResult=true', onExpectationFailure : { code:'test1', foo:'bar' }} )
       const response = await c.execute( { variables : { id : 1 } })
 
       expect(response.error).instanceOf(ExpectationFailureError)
-      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.message).equals(`the logic operation 'variables.id=2' expectation 'currentResult=true' failed`)
       expect(response.error.code).equals('test1')
       expect(response.error.additionalData).deep.equals({ foo:'bar'})
 
@@ -89,11 +89,10 @@ describe('LogicCommand', () => {
 
     it('returns an exception if logic fails against context and onExpectationFailure not set', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2'} )
+      const c = new LogicCommand( { logicOp : 'variables.id=2', expect : 'currentResult=true'} )
       const response = await c.execute( { variables : { id : 1 } })
-
       expect(response.error).instanceOf(ExpectationFailureError)
-      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.message).equals(`the logic operation 'variables.id=2' expectation 'currentResult=true' failed`)
       expect(response.error.code).undefined
       expect(response.error.additionalData).undefined
 
@@ -104,11 +103,11 @@ describe('LogicCommand', () => {
 
     it('returns an exception if logic fails against context and onExpectationFailure set to throw', async () => {
     
-      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure: 'throw'} )
+      const c = new LogicCommand( { logicOp : 'variables.id=2', expect : 'currentResult=true', onExpectationFailure: 'throw'} )
       const response = await c.execute( { variables : { id : 1 } })
 
       expect(response.error).instanceOf(ExpectationFailureError)
-      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.message).equals(`the logic operation 'variables.id=2' expectation 'currentResult=true' failed`)
       expect(response.error.code).undefined
       expect(response.error.additionalData).undefined
 

@@ -81,7 +81,7 @@ export class Context {
           executionOptions.client = client
         }
 
-        const { rowCount, rows, value, status, finalizedParams, failureAction, error } = await currentCommand.execute( currentContextSnapshot.generateContext(), executionOptions )
+        const { rowCount, rows, result, status, finalizedParams, failureAction, error } = await currentCommand.execute( currentContextSnapshot.generateContext(), executionOptions )
         
         currentResult.status = status
         
@@ -93,8 +93,8 @@ export class Context {
           currentResult.rows = rows
         }
         
-        if ( value !== undefined ) {
-          currentResult.value = value
+        if ( result !== undefined ) {
+          currentResult.result = result
         }
 
         if ( finalizedParams ) {

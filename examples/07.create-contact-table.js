@@ -12,17 +12,19 @@ const client = await pool.connect()
 
 const commands = [
   { 
-    "sql": `DROP TABLE IF EXISTS projects;`,
+    "sql": `DROP TABLE IF EXISTS contacts;`,
     "name": "drop-table",
     "params" : []
   },
   { 
-    "sql": `CREATE TABLE IF NOT EXISTS projects
+    "sql": `CREATE TABLE IF NOT EXISTS contacts
       (
         id int PRIMARY KEY NOT NULL,
         name text NOT NULL,
-        description text ,
-        status text NOT NULL DEFAULT 'active'::text
+        homephone text ,
+        mobilephone text,
+        workphone text,
+        emergencyphone text
       );`,
     "name": "create-table",
     "params" : []
@@ -34,7 +36,7 @@ const t = new TransactionManager( client, r )
 
 const result = await t.executeTransaction()
 
-console.log( '== 01.create-table results ===================================================')
+console.log( '== 07.create-contacts-table results ===================================================')
 console.log( result )
 console.log( '===============================================================================')
 

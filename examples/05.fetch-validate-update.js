@@ -34,7 +34,8 @@ r.addCommand(
  { 
     "name" : 'check-if-frozen',
     "purpose" : 'if frozen, the status can not be changed',
-    "logicOp": "lastDataResult.rows[0].status != 'frozen'"
+    "logicOp": "lastDataResult.rows[0].status != 'frozen'",
+    "expect" : "currentResult=true"
  })
 
  // update the record - note that it will return the new record without running another query

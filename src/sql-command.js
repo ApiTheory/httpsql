@@ -26,8 +26,6 @@ export class SqlCommand extends Command {
     this._params = commandOpts.params || []
     this._executableParams = []
     this._finalizedParams = []
-    this._expect = commandOpts.expect
-    this._onExpectationFailure = commandOpts.onExpectationFailure || 'throw'
 
     // walk the params to make sure they are valid expressions; not checking that they match to anything, just that
     // they are valid jsonata expression; only test strings because everything else would be a static var
