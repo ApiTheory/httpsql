@@ -17,7 +17,7 @@ export class Command  {
     this._strict = ( opts.strict !== undefined && opts.strict !== null ) ? opts.strict : true
 
     // evaluate expect
-    if ( opts.expect !== undefined && opts.expect !== null ) {
+    if ( opts.expect !== undefined && opts.expect !== null && opts.expect.trim().length > 0 ) {
 
       try { 
         jsonata(opts.expect)
@@ -27,8 +27,10 @@ export class Command  {
 
       this._expect = opts.expect
       this._expectationDescription = opts.expectationDescription
-      this._onExpectationFailure = opts.onExpectationFailure
+      this._onExpectationFailure = opts.onExpectationFailure || 'throw'
 
+    } else {
+      this._onExpectationFailure = 'throw'  //shouldnt be necessary but put here just in case
     }
     
   }

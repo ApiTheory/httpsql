@@ -34,12 +34,12 @@ describe('SqlCommand', () => {
   })
 
   it('should populate onExpectationFailure=stop', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ onExpectationFailure : 'stop' } } )
+    const c = new SqlCommand( { ...basicSqlCommand, ...{ expect: 'rowCount=1', onExpectationFailure : 'stop' } } )
     expect(c._onExpectationFailure).equal('stop')
   })
 
   it('should populate onExpectationFailure=object', () => {
-    const c = new SqlCommand( { ...basicSqlCommand, ...{ onExpectationFailure : { message: 'expect failure', code: 'e555', foo : 'bar' } } } )
+    const c = new SqlCommand( { ...basicSqlCommand, ...{ expect: 'rowCount=1', onExpectationFailure : { message: 'expect failure', code: 'e555', foo : 'bar' } } } )
     expect(c._onExpectationFailure).deep.equal({ message: 'expect failure', code: 'e555', foo : 'bar' })
   })
 

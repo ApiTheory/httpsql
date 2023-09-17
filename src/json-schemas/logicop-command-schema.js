@@ -5,6 +5,8 @@ export const logicOpSchema = {
     logicOp : { "type": "string" },
     name : { "type": "string" },
     purpose : { "type": "string" },
+    expect : { "type": "string" },
+    expectationDescription : { "type": "string" },
     onExpectationFailure : { "type": ["string", "object"] }
   },
   required : ["logicOp"],

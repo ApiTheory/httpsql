@@ -26,9 +26,6 @@ export class LogicCommand extends Command {
 
     const { logicOp, ...opts } = command
 
-    // this is what the expectation is ALWAYS for logic ops, basically, whatever command goes through MUST be true
-    opts.expect = 'value = true'
-    opts.onExpectationFailure = opts.onExpectationFailure || 'throw'
     super( logicOp, opts )
 
     // test the operation to make sure it's well formed.  This will NOT check the validity of parameters, just that
@@ -43,12 +40,10 @@ export class LogicCommand extends Command {
 
   async execute( contextSnapshot ) {
 
-    const evalResult = {}
-
     try {
 
       const expression = jsonata( this._command )
-      evalResult.value = await expression.evaluate( contextSnapshot )
+      contextSnapshot.currentResult = await expression.evaluate( contextSnapshot )
       
     } catch ( err ) {
 
@@ -56,37 +51,52 @@ export class LogicCommand extends Command {
       
     } 
 
-    if ( evalResult.value ) {
-      return { status : 'success' }
+    if ( this._expect ) {
+      
+      try {
+
+        const matchExpression = jsonata( this._expect )
+        const matchPasses = await matchExpression.evaluate( contextSnapshot )
+
+        if ( !matchPasses ) {
+          throw new ExpectationFailureError( `the logic operation '${this.command}' expectation '${this._expect}' failed`, this._expectationDescription)
+        }
+        
+      } catch ( err ) {
+        
+        if ( isPlainObject(this.onExpectationFailure)) {
+
+          const { message:customMessage, code, ...additionalData } = this.onExpectationFailure
+
+          return { 
+            error: new ExpectationFailureError( customMessage || `the logic operation '${this.command}' expectation '${this._expect}' failed`, this._expectationDescription , code, additionalData ),
+            result : contextSnapshot.currentResult,
+            status: 'expectation-failure', 
+            failureAction: 'throw'
+          }
+
+        } else if ( this.onExpectationFailure === 'stop') {
+          // returns rows and rowCount if failure = stop since the value will be valid
+          return { 
+            error: err,
+            result : contextSnapshot.currentResult,
+            status: 'expectation-failure', 
+            failureAction: this.onExpectationFailure
+          }
+
+        } else {
+          return { 
+            error: err,
+            result : contextSnapshot.currentResult,
+            status: 'expectation-failure', 
+            failureAction: this.onExpectationFailure
+          }
+        }
+      }
+
     }
 
-    if ( isPlainObject(this.onExpectationFailure)) {
-
-      const { message:customMessage, code, ...additionalData } = this.onExpectationFailure
-
-      return { 
-        error: new ExpectationFailureError( customMessage || `the logic operation: '${this._command}' failed`, this._expectationDescription , code, additionalData ),
-        status: 'expectation-failure', 
-        failureAction: 'throw'
-      }
-
-    } else if ( this.onExpectationFailure === 'stop') {
-      
-      return { 
-        error: new ExpectationFailureError( `the logic operation: '${this._command}' failed`, this._expectationDescription  ),
-        status: 'expectation-failure', 
-        failureAction: this.onExpectationFailure
-      
-      }
-
-    } else {
-
-      return { 
-        error: new ExpectationFailureError( `the logic operation: '${this._command}' failed`, this._expectationDescription  ),
-        status: 'expectation-failure', 
-        failureAction: this.onExpectationFailure 
-      }
-    }
+    return { result : contextSnapshot.currentResult, status: 'success' }
 
 
    
