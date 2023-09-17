@@ -11,6 +11,8 @@
     "sample4": "node ./examples/04.fetch-all.js",
     "sample5": "node ./examples/05.fetch-validate-update.js",
     "sample6": "node ./examples/06.sql-command-schema-failure.js",
+    "sample7": "node ./examples/07.create-contact-table.js",
+    "sample8": "node ./examples/08.transform-contacts.js",
     "test": "mocha",
     "testcoverage": "c8 --reporter=html mocha"
   },

@@ -49,3 +49,11 @@ Creates a project, attempts to fetch it by name, validates a specific status val
 ### 06.sql-command-schema-failure
 
 Uses an incorrectly formatted command to demonstrate how validation errors are thrown.  See the json-schemas directory for the different validation schemas.
+
+### 07.create-contact-table
+
+Creates a contacts table
+
+### 08.transform-contacts
+
+Demonstrates how a logic operation can transform the shape of the final output.
