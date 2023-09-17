@@ -7,13 +7,16 @@
  * It also shows how to retrieve the full context (not just the last operation) of the request through the output option. 
  */
 
-import  { TransactionManager } from '../index.js'
-import { Root } from '../src/root.js'
+import { getPool } from '../utils.js'
+import  { TransactionManager } from '../../index.js'
+import { Root } from '../../src/root.js'
 import 'dotenv/config'
-import { getPool } from './utils.js'
+import { PgDataDriver } from '../../src/data-drivers/pg-driver.js'
 
 const pool = getPool()
 const client = await pool.connect()
+
+const driver = new PgDataDriver( client )
 
 const r = new Root()
 
@@ -30,17 +33,18 @@ r.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ($1, $2, $3 ) RETURNING *;`,
     name: "insert-project-2",
     strict: false,
-    params : [ 'lastDataResult.rows[0].id', 'variables.name', 'status'],
+    params : [ 'lastDataResult.rows[0].id', 'variables.name2', 'status'],
     expect: "rowCount=1"
 })
 
-const t = new TransactionManager( client, r )
+const t = new TransactionManager( driver, r )
 
 // requesting the full context - usually only necessary for debugging
-const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" }, {output: 'full-context' } )
+const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" } )
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
-console.log( createProjectFailureResults )
+console.log( createProjectFailureResults.results[0] )
+console.log( createProjectFailureResults.results[1] )
 console.log( '===============================================================================')
 
 client.release()

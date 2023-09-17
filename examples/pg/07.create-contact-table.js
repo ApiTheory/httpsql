@@ -2,13 +2,16 @@
  * If a table named "projects" exists, it is dropped.  Then a new table named "projects" is created.
  */
 
-import { getPool } from './utils.js'
-import  { TransactionManager } from '../index.js'
-import { Root } from '../src/root.js'
+import { getPool } from '../utils.js'
+import  { TransactionManager } from '../../index.js'
+import { Root } from '../../src/root.js'
 import 'dotenv/config'
+import { PgDataDriver } from '../../src/data-drivers/pg-driver.js'
 
 const pool = getPool()
 const client = await pool.connect()
+
+const driver = new PgDataDriver( client )
 
 const commands = [
   { 
@@ -32,7 +35,7 @@ const commands = [
 ]
 
 const r = new Root( commands )
-const t = new TransactionManager( client, r )
+const t = new TransactionManager( driver, r )
 
 const result = await t.executeTransaction()
 
