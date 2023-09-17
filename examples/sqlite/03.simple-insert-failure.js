@@ -33,16 +33,16 @@ r.addCommand(
   { sql: `INSERT INTO projects ( id, name, status ) VALUES ( ?, ?, ? ) RETURNING *;`,
     name: "insert-project-2",
     strict: false,
-    params : [ 'lastDataResult.rows[0].id', 'variables.name2', 'status'],
+    params : [ 'lastDataResult.rows[0].id', 'variables.name2', 'variables.status'],
     expect: "rowCount=1"
 })
 
 const t = new TransactionManager( driver, r )
 
 // requesting the full context - usually only necessary for debugging
-const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" })
+const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" }, { output: 'full-context'})
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
-console.log( createProjectFailureResults.results[1] )
+console.log( createProjectFailureResults )
 console.log( '===============================================================================')
 
