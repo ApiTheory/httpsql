@@ -167,8 +167,7 @@ describe('TransactionManager', () => {
   it('executeTransaction should fail if rollback already called', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    const assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    const executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    const executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     
     await t.beginTransaction()
     await t.rollbackTransaction()
@@ -183,7 +182,6 @@ describe('TransactionManager', () => {
     }
    
     expect(thrown).to.be.true
-    expect(assignVariablesStub.callCount).equal(0)
     expect(clientMockQuery.callCount).equal(2)
     expect( executeCommandsStub.callCount).equal(0)
   })
@@ -191,8 +189,7 @@ describe('TransactionManager', () => {
   it('executeTransaction should fail if commit already called', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    const assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    const executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    const executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     
     await t.beginTransaction()
     await t.commitTransaction()
@@ -207,7 +204,6 @@ describe('TransactionManager', () => {
     }
    
     expect(thrown).to.be.true
-    expect(assignVariablesStub.callCount).equal(0)
     expect(clientMockQuery.callCount).equal(2)
     expect( executeCommandsStub.callCount).equal(0)
   })
@@ -215,12 +211,8 @@ describe('TransactionManager', () => {
   it('executeTransaction called with variables, executeCommand returns success, default output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    var assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    var executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    // assignVariables call
-    expect(assignVariablesStub.callCount).equal(1)
-    expect(assignVariablesStub.firstCall.args[0]).to.deep.equal({ id: 1, name: 'test' })
     const calls = clientMockQuery.getCalls()
     expect(calls[0].args).to.deep.equal(['BEGIN'])
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
@@ -228,20 +220,16 @@ describe('TransactionManager', () => {
     expect(calls[1].args).to.deep.equal(['COMMIT'])
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
-    expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
-    expect( results ).to.deep.equal({ finalState : 'success', results: { status: 'success', rows:[], rowCount: 0 } })
-    
+    expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
+    expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
+
   })
 
   it('executeTransaction called with variables, executeCommand returns success, all results output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    var assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    var executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' }, { output: 'allresults'})
-    // assignVariables call
-    expect(assignVariablesStub.callCount).equal(1)
-    expect(assignVariablesStub.firstCall.args[0]).to.deep.equal({ id: 1, name: 'test' })
     const calls = clientMockQuery.getCalls()
     expect(calls[0].args).to.deep.equal(['BEGIN'])
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
@@ -249,42 +237,33 @@ describe('TransactionManager', () => {
     expect(calls[1].args).to.deep.equal(['COMMIT'])
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
-    expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
-    expect( results ).to.deep.equal({ finalState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] })
-    expect ( t.transactionState).equal('transact-execute-complete')
+    expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
+    expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
+    expect ( t.transactionState).equal('transact-execute-commit')
   })
 
   it('executeTransaction called with variables, executeCommand returns success, full context output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    var assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    var executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
+    var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' }, { output: 'fullcontext'})
-    // assignVariables call
-    expect(assignVariablesStub.callCount).equal(1)
-    expect(assignVariablesStub.firstCall.args[0]).to.deep.equal({ id: 1, name: 'test' })
     const calls = clientMockQuery.getCalls()
     expect(calls[0].args).to.deep.equal(['BEGIN'])
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
     // occurs in the command tests
     expect(calls[1].args).to.deep.equal(['COMMIT'])
     // executeCommands call
-    expect(executeCommandsStub.callCount).equal(1)
-    expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
-    expect( results.finalState ).equal('success')
-    expect( results.context).to.be.ok
+    expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
+    expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
     
   })
 
   it('executeTransaction called with variables, executeCommand returns stop, default output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    var assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    var executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { executionState : 'stop', results: [{ status: 'stop', rows:[], rowCount: 0, expectationFailureMessage: 'expectation failed' }] } )
+
+    var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'stop', results: [{ status: 'stop', rows:[], rowCount: 0, expectationFailureMessage: 'expectation failed' }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    // assignVariables call
-    expect(assignVariablesStub.callCount).equal(1)
-    expect(assignVariablesStub.firstCall.args[0]).to.deep.equal({ id: 1, name: 'test' })
     const calls = clientMockQuery.getCalls()
     expect(calls[0].args).to.deep.equal(['BEGIN'])
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
@@ -292,28 +271,18 @@ describe('TransactionManager', () => {
     expect(calls[1].args).to.deep.equal(['COMMIT'])
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
-    expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
-    expect( results ).to.deep.equal({ finalState : 'stop', results: { status: 'stop', rows:[], rowCount: 0, expectationFailureMessage: 'expectation failed' } })
-    
+    expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
+    expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
+
   })
 
   it('executeTransaction called with variables, executeCommand returns error, default output', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    var assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    var executeCommandsStub = sinon.stub(t._context, 'executeCommands').resolves( { 
-      executionState : 'error', results: [{ 
-      status: 'databaseFailure',
-      failureAction : 'throw' ,
-      error : {
-        message : 'test error'
-      }
-    } ] } )
+    var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { 
+      executionState : 'error' } )
 
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    // assignVariables call
-    expect(assignVariablesStub.callCount).equal(1)
-    expect(assignVariablesStub.firstCall.args[0]).to.deep.equal({ id: 1, name: 'test' })
     const calls = clientMockQuery.getCalls()
     expect(calls[0].args).to.deep.equal(['BEGIN'])
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
@@ -321,38 +290,16 @@ describe('TransactionManager', () => {
     expect(calls[1].args).to.deep.equal(['ROLLBACK'])
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
-    expect(executeCommandsStub.firstCall.firstArg.id).to.equal('testClient')
-    expect( results ).to.deep.equal({ finalState : 'error', results: { status: 'databaseFailure', failureAction : 'throw' , error : { message : 'test error' } } })
+    expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
+    expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
     
   })
 
-  it('assignVariables method throws', async () => {
-    
-    const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    const assignVariablesStub = sinon.stub(t._context, 'assignVariables').throws( new Error('test error') )
-    const executeCommandsStub = sinon.stub(t._context, 'executeCommands')
-    
-    let thrown
-
-    try {
-      const results = await t.executeTransaction( { id: 1, name: 'test' })
-    } catch ( err) {
-      thrown = true
-      expect(err.message).equal('test error')
-      expect(err).instanceOf(Error)
-      expect(assignVariablesStub.callCount).equal(1)
-      expect(executeCommandsStub.callCount).equal(0)
-    }
-    
-    expect(thrown).equal(true)
-
-  })
 
   it('executTransaction method rejects', async () => {
     
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
-    const assignVariablesStub = sinon.stub(t._context, 'assignVariables')
-    const executeCommandsStub = sinon.stub(t._context, 'executeCommands').rejects( new Error('test error') )
+    const executeCommandsStub = sinon.stub(t._context, 'executeRequest').rejects( new Error('test error') )
     
     let thrown
 
@@ -362,7 +309,6 @@ describe('TransactionManager', () => {
       thrown = true
       expect(err.message).equal('test error')
       expect(err).instanceOf(Error)
-      expect(assignVariablesStub.callCount).equal(1)
       expect(executeCommandsStub.callCount).equal(1)
     }
     

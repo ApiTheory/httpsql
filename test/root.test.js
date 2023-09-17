@@ -162,7 +162,7 @@ describe('Root', () => {
     })
 
     it('should add a command with basic logicop', () => {
-      const logicOp = { '===' : ['active', { 'var' : 'status'}]}
+      const logicOp = 'status=1'
       const r = new Root()
       r.addCommand( { logicOp } )
       expect(r.commands.length).equal(1)

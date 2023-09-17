@@ -1,11 +1,11 @@
 import { LogicEngine } from 'json-logic-engine'
 import { LogicCommand } from '../src/logic-command.js'
-import { LogicOpFailureError } from '../src/errors.js'
+import { ExpectationFailureError, LogicOpFailureError } from '../src/errors.js'
 import { expect } from 'chai'
 import sinon from 'sinon'
 
 const basicLogicCommand = {
-  logicOp : {}
+  logicOp : 'test=1'
 }
 
 describe('LogicCommand', () => {
@@ -17,7 +17,7 @@ describe('LogicCommand', () => {
   it('should be a LogicCommand', () => {
     const c = new LogicCommand( basicLogicCommand )
     expect(c).to.be.an.instanceOf(LogicCommand)
-    expect(c._onFailure).equal('throw')
+    expect(c._onExpectationFailure).equal('throw')
     expect(c.type).equal('logic')
   
   })
@@ -28,106 +28,82 @@ describe('LogicCommand', () => {
     }).to.throw('the logic command object can not be validated')
   })
 
-  it('execute succeeds because logicEngine returns true', async () => {
-
-    const results = [
-      { rowCount: 0, rows: [] },
-      { rowCount: 1, rows: [ { status : 'active' }] }
-    ]
-
-    const logicOp = { '===' : ['active', { 'var' : 'status'}]}
-    const logicEngineRunStub = sinon.stub(LogicEngine.prototype, 'run').returns( true )
-    const c = new LogicCommand( { logicOp  } )
-    const r = await c.execute( results )
-    expect(logicEngineRunStub.calledOnce).to.be.true
-    expect(logicEngineRunStub.firstCall.args.length).equal(2)
-    expect(logicEngineRunStub.firstCall.args[0]).to.deep.equal(logicOp)
-    expect(logicEngineRunStub.firstCall.args[1].results).to.deep.equal(results)
-    expect(logicEngineRunStub.firstCall.args[1].lastop).to.deep.equal(results[1])
-    expect(r.status).to.equal('success')
-    logicEngineRunStub.restore()
-
+  it('should throw if logicOp is not logical', () => {
+    expect(() => {
+      new LogicCommand( { logicOp : 'test===1'} )
+    }).to.throw('the logic operation is not well formed: The symbol "=" cannot be used as a unary operator')
   })
 
-  it('execute fails and stops because logicEngine returns false', async () => {
+  describe( 'execute method', () => {
+   
+    it('successfully processes logic against context', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=1'} )
+      const response = await c.execute( { variables : { id : 1 } })
+      expect(response).deep.equals({ status: 'success' })
+      
+    })
 
-    const results = [
-      { rowCount: 0, rows: [] },
-      { rowCount: 1, rows: [ { status : 'active' }] }
-    ]
+    it('returns a stop execution if logic fails against context', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : 'stop'} )
+      const response = await c.execute( { variables : { id : 1 } })
 
-    const logicOp = { '===' : ['active', { 'var' : 'status'}]}
-    const logicEngineRunStub = sinon.stub(LogicEngine.prototype, 'run').returns( false )
-    const c = new LogicCommand( { logicOp, onFailure : 'stop' } )
-    const r = await c.execute( results )
-    expect(logicEngineRunStub.calledOnce).to.be.true
-    expect(logicEngineRunStub.firstCall.args.length).equal(2)
-    expect(logicEngineRunStub.firstCall.args[0]).to.deep.equal(logicOp)
-    expect(logicEngineRunStub.firstCall.args[1].results).to.deep.equal(results)
-    expect(logicEngineRunStub.firstCall.args[1].lastop).to.deep.equal(results[1])
-    expect(r.status).to.equal('stop')
-    logicEngineRunStub.restore()
+      expect(response.error).instanceOf(ExpectationFailureError)
+      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.code).undefined
+      expect(response.error.additionalData).undefined
 
-  })
+      expect(response.status).equals( 'expectation-failure')
+      expect(response.failureAction).equals( 'stop')
+      
+    })
 
-  it('execute fails and returns exceptionbecause logicEngine returns false', async () => {
+    it('returns a custom message if logic fails against context', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : { message: 'something is up', code:'test1', foo:'bar' }} )
+      const response = await c.execute( { variables : { id : 1 } })
 
-    const results = [
-      { rowCount: 0, rows: [] },
-      { rowCount: 1, rows: [ { status : 'active' }] }
-    ]
+      expect(response.error).instanceOf(ExpectationFailureError)
+      expect(response.error.message).equals(`something is up`)
+      expect(response.error.code).equals('test1')
+      expect(response.error.additionalData).deep.equals({ foo:'bar'})
 
-    const logicOp = { '===' : ['active', { 'var' : 'status'}]}
-    const logicEngineRunStub = sinon.stub(LogicEngine.prototype, 'run').returns( false )
-    const c = new LogicCommand( { logicOp, onFailure : { message: 'logicfailure happened', code: 'e304', foo : 'bar' } } )
-    let thrown = false
-    try {
-      await c.execute( results )
-    } catch ( err ) {
-      thrown = true
-      expect(err.message).equal('logicfailure happened')
-      expect(err.code).equal('e304')
-      expect(err.additionalData).deep.equal({ foo : 'bar' })
-      expect(err).to.be.instanceOf(LogicOpFailureError)
-    }
-    expect(thrown).to.be.true
-    expect(logicEngineRunStub.calledOnce).to.be.true
-    expect(logicEngineRunStub.firstCall.args.length).equal(2)
-    expect(logicEngineRunStub.firstCall.args[0]).to.deep.equal(logicOp)
-    expect(logicEngineRunStub.firstCall.args[1].results).to.deep.equal(results)
-    expect(logicEngineRunStub.firstCall.args[1].lastop).to.deep.equal(results[1])
-    logicEngineRunStub.restore()
+      expect(response.status).equals( 'expectation-failure')
+      expect(response.failureAction).equals( 'throw')
+      
+    })
 
-  })
+    it('returns a custom message without a message if logic fails against context', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=2', onExpectationFailure : { code:'test1', foo:'bar' }} )
+      const response = await c.execute( { variables : { id : 1 } })
 
-  it('execute fails and returns exceptionbecause logicEngine returns false', async () => {
+      expect(response.error).instanceOf(ExpectationFailureError)
+      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.code).equals('test1')
+      expect(response.error.additionalData).deep.equals({ foo:'bar'})
 
-    const results = [
-      { rowCount: 0, rows: [] },
-      { rowCount: 1, rows: [ { status : 'active' }] }
-    ]
+      expect(response.status).equals( 'expectation-failure')
+      expect(response.failureAction).equals( 'throw')
+      
+    })
 
-    const logicOp = { '===' : ['active', { 'var' : 'status'}]}
-    const logicEngineRunStub = sinon.stub(LogicEngine.prototype, 'run').returns( false )
-    const c = new LogicCommand( { logicOp } )
-    let thrown = false
-    try {
-      await c.execute( results )
-    } catch ( err ) {
-      thrown = true
-      expect(err.message).equal('')
-      expect(err.code).undefined
-      expect(err.additionalData).undefined
-      expect(err).to.be.instanceOf(LogicOpFailureError)
-    }
-    expect(thrown).to.be.true
-    expect(logicEngineRunStub.calledOnce).to.be.true
-    expect(logicEngineRunStub.firstCall.args.length).equal(2)
-    expect(logicEngineRunStub.firstCall.args[0]).to.deep.equal(logicOp)
-    expect(logicEngineRunStub.firstCall.args[1].results).to.deep.equal(results)
-    expect(logicEngineRunStub.firstCall.args[1].lastop).to.deep.equal(results[1])
-    logicEngineRunStub.restore()
+    it('returns an exception if logic fails against context without onExpectationFailure set', async () => {
+    
+      const c = new LogicCommand( { logicOp : 'variables.id=2' } )
+      const response = await c.execute( { variables : { id : 1 } })
+
+      expect(response.error).instanceOf(ExpectationFailureError)
+      expect(response.error.message).equals(`the logic operation: 'variables.id=2' failed`)
+      expect(response.error.code).undefined
+      expect(response.error.additionalData).undefined
+
+      expect(response.status).equals( 'expectation-failure')
+      expect(response.failureAction).equals( 'throw')
+      
+    })
 
   })
-
+ 
 })

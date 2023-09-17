@@ -1,5 +1,11 @@
 import { expect } from 'chai'
-import { CommandValidationError, ExpectationFailureError, LogicOpFailureError } from '../src/errors.js'
+import { 
+  CommandValidationError, 
+  ExpectationFailureError, 
+  ExpectationEvaluationError, 
+  ParameterMappingError,
+  ParameterMappingErrors,
+  LogicOpFailureError } from '../src/errors.js'
 
 // create unit tests for LogicOpFailureError
 
@@ -44,16 +50,94 @@ describe('ExpectationFailureError', () => {
   })
 
   it('should include all arguments', () => {
-    const error = new ExpectationFailureError('error occurred', 1, 2, '500', { d: 'e', t: false })
+    const error = new ExpectationFailureError('error occurred', 'test=1', '500', { d: 'e', t: false })
     expect(error.message).to.be.a('string')
     expect(error.message).equal('error occurred')
-    expect(error.expected).equal(1)
-    expect(error.received).equal(2)
+    expect(error.expected).equal('test=1')
     expect(error.code).equal('500')
     expect(error.additionalData).deep.equal({ d: 'e', t: false })
   })
   
   
+})
+describe('ExpectationEvaluationError', () => {
+  
+  it('should be a subclass of Error', () => {
+    const error = new ExpectationEvaluationError()
+    expect(error).to.be.an.instanceOf(Error)
+  })
+
+  it('should handle no message', () => {
+    const error = new ExpectationEvaluationError()
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('the expectation could not be evaluated')
+    expect(error.expectation).undefined
+  })
+
+  it('should have a message', () => {
+    const error = new ExpectationEvaluationError('error occurred')
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+    expect(error.expectation).undefined
+  })
+
+  it('should have a expectation', () => {
+    const error = new ExpectationEvaluationError('error occurred', 'test===1')
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+    expect(error.expectation).to.be.a('string')
+    expect(error.expectation).equal('test===1')
+  })
+
+})
+
+describe('ParameterMappingError', () => {
+ 
+  it('should be a subclass of Error', () => {
+    const error = new ParameterMappingError()
+    expect(error).to.be.an.instanceOf(Error)
+    expect(error.name).equal('ParameterMappingError')
+  })
+  
+  it('should have a message', () => {
+    const error = new ParameterMappingError('error occurred')
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+  })
+
+  it('should include all arguments', () => {
+    const error = new ParameterMappingError('error occurred', 1)
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+    expect(error.index).equal(1)
+  })
+})
+
+describe('ParameterMappingErrors', () => {
+  
+  it('should be a subclass of Error', () => {
+    const error = new ParameterMappingErrors()
+    expect(error).to.be.an.instanceOf(Error)
+    expect(error.name).equal('ParameterMappingErrors')
+  })
+
+  it('should have a message', () => {
+    const error = new ParameterMappingErrors('error occurred')
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+  })
+
+  it('should include all arguments', () => {
+    const error = new ParameterMappingErrors('error occurred', [ new ParameterMappingError('error1'), new ParameterMappingError('error2')])
+    expect(error.message).to.be.a('string')
+    expect(error.message).equal('error occurred')
+    expect(error.errors.length).equal(2)
+    expect(error.errors[0].message).equal('error1')
+    expect(error.errors[1].message).equal('error2')
+    expect(error.errors[0].index).undefined
+    expect(error.errors[1].index).undefined
+  })
+
 })
 
 describe('CommandValidationError', () => {
