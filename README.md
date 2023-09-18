@@ -9,7 +9,8 @@ Execute SQL Queries over HTTPS.  A simple POC to see if HttpSql is a reasonable 
 
 ## Rationale
 
-Over the years, developers have created many ways of manipulating and extracting data from databases via http.  HttpSql attempts to leverage the most ubiquotous language in computerdom - sql - to make it as easy as possible to execute data requests.  
+Over the years, developers have created many ways of manipulating and extracting data from databases via http.  HttpSql attempts to leverage the most ubiquotous language in computerdom - sql - to make it as easy as possible to execute data requests while also adding exception handling and the ability to execute business
+logic and data transformations within the transactional request.
 
 The HttpSql project is a POC to expriment and understand the pros and cons of this approach.
 
@@ -70,14 +71,17 @@ It may look like a lot, but its doing the following which would require far more
 - update the project with the new data using the ID that was retrieved in the first operation; check to make sure only 1 record was updated; throw an error if no rows were updated or too many rows were updated.
 - return the data from the updated project.
 
-In addition to throwing exceptions, onExpectationFailure can just equal 'stop.'  If that happens, then the entire transaction is commited up to that point, but no additional commands will execute.  
+In addition to throwing exceptions, onExpectationFailure can just equal 'stop.'  If that happens, then the entire transaction is commited up to that point, but no additional commands will execute.  onExpectationFailure can also be a plain object to deliver custom error messages.
 
-A nice feature of the HttpSql response is that every step taken within the transaction is documented.  This can be saved for audit purposes and just
-general debugging.
+A nice feature of the HttpSql response is that every step taken within the transaction is documented by the response.  This can be saved for audit purposes and just general debugging.
 
 ## Learn More
 
 Visit the [HttpSql website](http://www.httpsql.com) to view complete documentation.  There is also an [HttpSql playground](https://www.httpsql/htpsql-playground) to test out your own requests.
+
+## Examples
+
+Check out the examples directory to see how the same API calls are easily made against Postgres and Sqlite.
 
 ## Future Roadmap
 
