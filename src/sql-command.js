@@ -49,7 +49,7 @@ export class SqlCommand extends Command {
 
   
   async execute ( contextSnapshot, opts = {} ) {
-    
+
     if (!contextSnapshot ) {
       throw new Error( 'a contextSnapshot is required to execute the command')
     }
@@ -70,7 +70,7 @@ export class SqlCommand extends Command {
 
         const expression = jsonata( param )
         paramResult = await expression.evaluate( contextSnapshot )
-        
+
         // check strict rules
         if ( paramResult === undefined && this._strict ) {
           parameterErrors.push( { index: x, param, message: 'unable to map parameter to an existing value' })

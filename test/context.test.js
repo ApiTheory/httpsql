@@ -6,7 +6,8 @@ import { Command } from '../src/command.js'
 import { Root  } from '../src/root.js'
 import { SqlCommand } from '../src/sql-command.js'
 import { LogicCommand } from '../src/logic-command.js'
-import { DatabaseError } from 'pg-protocol'
+import { DatabaseError } from '../src/errors.js'
+
 // create unit test suite
 
 describe('Context', () => { 

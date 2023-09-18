@@ -5,16 +5,24 @@ import sinon from 'sinon'
 
 describe('TransactionManager', () => {
   
-
   const clientMock = {
     id: 'testClient',
+    beginTransaction: async() => { return Promise.resolve() },    
+    commitTransaction: async() => { return Promise.resolve() },    
+    rollbackTransaction: async() => { return Promise.resolve() },
     query: async (sql, params) => { return Promise.resolve() }
   }
 
-  const clientMockQuery = sinon.spy(clientMock, 'query' )
+  const clientQuerySpy = sinon.spy(clientMock, 'query' )
+  const clientBeginTransactionSpy = sinon.spy(clientMock, 'beginTransaction' )
+  const clientCommitTransactionSpy = sinon.spy(clientMock, 'commitTransaction' )
+  const clientRollbackTransactionSpy = sinon.spy(clientMock, 'rollbackTransaction' )
 
   afterEach(() => {
-    clientMockQuery.resetHistory()
+    clientQuerySpy.resetHistory()
+    clientBeginTransactionSpy.resetHistory()
+    clientCommitTransactionSpy.resetHistory()
+    clientRollbackTransactionSpy.resetHistory()
   })
 
   describe('constructor', () => { 
@@ -59,8 +67,7 @@ describe('TransactionManager', () => {
   it('should call beginTransaction method successfully', async () => {
     const t = new TransactionManager( clientMock, new Root() )
     await t.beginTransaction()  
-    expect(clientMockQuery.calledOnce).to.be.true
-    expect(clientMockQuery.firstCall.args[0]).to.equal('BEGIN')
+    expect(clientBeginTransactionSpy.calledOnce).to.be.true
     expect(t.transactionState).to.equal('transact-begin-complete')
   })
 
@@ -68,8 +75,8 @@ describe('TransactionManager', () => {
     const t = new TransactionManager( clientMock, new Root() )
     await t.beginTransaction()  
     await t.commitTransaction()
-    expect(clientMockQuery.calledTwice).to.be.true
-    expect(clientMockQuery.secondCall.args[0]).to.equal('COMMIT')
+    expect(clientBeginTransactionSpy.calledOnce).to.be.true
+    expect(clientCommitTransactionSpy.calledOnce).to.be.true
     expect(t.transactionState).to.equal('transact-commit-complete')
   })
 
@@ -77,8 +84,8 @@ describe('TransactionManager', () => {
     const t = new TransactionManager( clientMock, new Root() )
     await t.beginTransaction()  
     await t.rollbackTransaction()
-    expect(clientMockQuery.calledTwice).to.be.true
-    expect(clientMockQuery.secondCall.args[0]).to.equal('ROLLBACK')
+    expect(clientBeginTransactionSpy.calledOnce).to.be.true
+    expect(clientRollbackTransactionSpy.calledOnce).to.be.true
     expect(t.transactionState).to.equal('transact-rollback-complete')
   })
 
@@ -89,7 +96,10 @@ describe('TransactionManager', () => {
       await t.commitTransaction()
     } catch ( err ) {
       thrown = true
-      expect(clientMockQuery.callCount).equal(0)
+      expect(clientBeginTransactionSpy.calledOnce).to.be.false
+      expect(clientRollbackTransactionSpy.calledOnce).to.be.false
+      expect(clientCommitTransactionSpy.calledOnce).to.be.false  // should not even be called
+      expect(clientQuerySpy.calledOnce).to.be.false
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`the transaction can not be committed because its state = 'not-started'`)
       expect(t.transactionState).to.equal('not-started')
@@ -106,7 +116,10 @@ describe('TransactionManager', () => {
       await t.rollbackTransaction()
     } catch ( err ) {
       thrown = true
-      expect(clientMockQuery.callCount).equal(0)
+      expect(clientBeginTransactionSpy.calledOnce).to.be.false
+      expect(clientRollbackTransactionSpy.calledOnce).to.be.false
+      expect(clientCommitTransactionSpy.calledOnce).to.be.false  
+      expect(clientQuerySpy.calledOnce).to.be.false
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`the transaction can not be rolled back because its state = 'not-started'`)
       expect(t.transactionState).to.equal('not-started')
@@ -124,13 +137,17 @@ describe('TransactionManager', () => {
       await t.beginTransaction()
     } catch ( err ) {
       thrown = true
+      expect(clientBeginTransactionSpy.callCount).equal(1)
+      expect(clientRollbackTransactionSpy.calledOnce).to.be.false
+      expect(clientCommitTransactionSpy.calledOnce).to.be.false  
+      expect(clientQuerySpy.calledOnce).to.be.false
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`the transaction can not be started because its state = 'transact-begin-complete'`)
     
     }
 
     expect(thrown).to.be.true
-    expect(clientMockQuery.callCount).equal(1)
+
 
   })
 
@@ -142,25 +159,30 @@ describe('TransactionManager', () => {
     expect(t._transactionStarted).true
     expect(results.finalState).equal('nothing-to-do')
     expect(t.transactionState).to.equal('not-started')
-    expect(clientMockQuery.callCount).equal(0)
+    expect(clientQuerySpy.callCount).equal(0)
     
   })
 
   it('should fail when executeTransaction method called twice', async () => {
-    const t = new TransactionManager( clientMock, new Root() )
+    const r = new Root( [{ sql:'select * from table1;' }] )
+    const t = new TransactionManager( clientMock, r )
     await t.executeTransaction()
     let thrown = false
     try {
       await t.executeTransaction()
     } catch ( err ) {
       thrown = true
+      expect(clientBeginTransactionSpy.callCount).equal(1)
+      expect(clientRollbackTransactionSpy.callCount).equal(1)
+      expect(clientCommitTransactionSpy.calledOnce).to.be.false  
+      expect(clientQuerySpy.callCount).equal(1)
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`a transaction can only be started once - create a new object in order to execute a new transaction`)
     
     }
 
     expect(thrown).to.be.true
-    expect(clientMockQuery.callCount).equal(0)
+
 
   })
 
@@ -177,13 +199,17 @@ describe('TransactionManager', () => {
       const results = await t.executeTransaction( { id: 1, name: 'test' })
     } catch ( err) {
       thrown = true
+      expect(clientBeginTransactionSpy.callCount).equal(1)
+      expect(clientRollbackTransactionSpy.callCount).equal(1)
+      expect(clientCommitTransactionSpy.callCount).equal(0)
+      expect(clientQuerySpy.callCount).equal(0)
+      expect( executeCommandsStub.callCount).equal(0)
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`the transaction can not be executed because its state = 'transact-rollback-complete'`)
     }
    
     expect(thrown).to.be.true
-    expect(clientMockQuery.callCount).equal(2)
-    expect( executeCommandsStub.callCount).equal(0)
+
   })
 
   it('executeTransaction should fail if commit already called', async () => {
@@ -199,13 +225,17 @@ describe('TransactionManager', () => {
       const results = await t.executeTransaction( { id: 1, name: 'test' })
     } catch ( err) {
       thrown = true
+      expect(clientBeginTransactionSpy.callCount).equal(1)
+      expect(clientRollbackTransactionSpy.callCount).equal(0)
+      expect(clientCommitTransactionSpy.callCount).equal(1)
+      expect(clientQuerySpy.callCount).equal(0)
+      expect( executeCommandsStub.callCount).equal(0)
       expect(err).to.be.an.instanceOf(Error)
       expect(err.message).to.equal(`the transaction can not be executed because its state = 'transact-commit-complete'`)
     }
    
     expect(thrown).to.be.true
-    expect(clientMockQuery.callCount).equal(2)
-    expect( executeCommandsStub.callCount).equal(0)
+
   })
 
   it('executeTransaction called with variables, executeCommand returns success, default output', async () => {
@@ -213,11 +243,13 @@ describe('TransactionManager', () => {
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
     var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    const calls = clientMockQuery.getCalls()
-    expect(calls[0].args).to.deep.equal(['BEGIN'])
+    const calls = clientQuerySpy.getCalls()
+    expect(clientBeginTransactionSpy.callCount).equal(1)
+    expect(clientRollbackTransactionSpy.callCount).equal(0)
+    expect(clientCommitTransactionSpy.callCount).equal(1)
+    expect(clientQuerySpy.callCount).equal(0)
     // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
     // occurs in the command tests
-    expect(calls[1].args).to.deep.equal(['COMMIT'])
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
     expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
@@ -230,11 +262,10 @@ describe('TransactionManager', () => {
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
     var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' }, { output: 'allresults'})
-    const calls = clientMockQuery.getCalls()
-    expect(calls[0].args).to.deep.equal(['BEGIN'])
-    // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
-    // occurs in the command tests
-    expect(calls[1].args).to.deep.equal(['COMMIT'])
+    const calls = clientQuerySpy.getCalls()
+    expect(clientBeginTransactionSpy.callCount).equal(1)
+    expect(clientRollbackTransactionSpy.callCount).equal(0)
+    expect(clientCommitTransactionSpy.callCount).equal(1)
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
     expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
@@ -247,11 +278,10 @@ describe('TransactionManager', () => {
     const t = new TransactionManager( clientMock, new Root([{ sql:'select * from table1;' }]) )
     var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'success', results: [{ status: 'success', rows:[], rowCount: 0 }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' }, { output: 'fullcontext'})
-    const calls = clientMockQuery.getCalls()
-    expect(calls[0].args).to.deep.equal(['BEGIN'])
-    // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
-    // occurs in the command tests
-    expect(calls[1].args).to.deep.equal(['COMMIT'])
+    const calls = clientQuerySpy.getCalls()
+    expect(clientBeginTransactionSpy.callCount).equal(1)
+    expect(clientRollbackTransactionSpy.callCount).equal(0)
+    expect(clientCommitTransactionSpy.callCount).equal(1)
     // executeCommands call
     expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
     expect(executeCommandsStub.firstCall.args[1].client.id).to.equal('testClient')
@@ -264,11 +294,9 @@ describe('TransactionManager', () => {
 
     var executeCommandsStub = sinon.stub(t._context, 'executeRequest').resolves( { executionState : 'stop', results: [{ status: 'stop', rows:[], rowCount: 0, expectationFailureMessage: 'expectation failed' }] } )
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    const calls = clientMockQuery.getCalls()
-    expect(calls[0].args).to.deep.equal(['BEGIN'])
-    // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
-    // occurs in the command tests
-    expect(calls[1].args).to.deep.equal(['COMMIT'])
+    expect(clientBeginTransactionSpy.callCount).equal(1)
+    expect(clientRollbackTransactionSpy.callCount).equal(0)
+    expect(clientCommitTransactionSpy.callCount).equal(1)
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
     expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)
@@ -283,11 +311,11 @@ describe('TransactionManager', () => {
       executionState : 'error' } )
 
     const results = await t.executeTransaction( { id: 1, name: 'test' })
-    const calls = clientMockQuery.getCalls()
-    expect(calls[0].args).to.deep.equal(['BEGIN'])
-    // note that we can't test the call to the database because its been stubbed out above.  Assume testing for that
-    // occurs in the command tests
-    expect(calls[1].args).to.deep.equal(['ROLLBACK'])
+    const calls = clientQuerySpy.getCalls()
+    expect(clientBeginTransactionSpy.callCount).equal(1)
+    expect(clientRollbackTransactionSpy.callCount).equal(1)
+    expect(clientCommitTransactionSpy.callCount).equal(0)
+    expect(clientQuerySpy.callCount).equal(0)
     // executeCommands call
     expect(executeCommandsStub.callCount).equal(1)
     expect(executeCommandsStub.firstCall.args[0].id).to.equal(1)

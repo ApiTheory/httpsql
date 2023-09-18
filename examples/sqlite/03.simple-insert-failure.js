@@ -7,19 +7,22 @@
  * It also shows how to retrieve the full context (not just the last operation) of the request through the output option. 
  */
 
-import  { TransactionManager } from '../index.js'
-import { Root } from '../src/root.js'
-import 'dotenv/config'
-import { getPool } from './utils.js'
+import Database from 'better-sqlite3'
+const db = new Database('foobar.db' )
+db.pragma('journal_mode = WAL')
 
-const pool = getPool()
-const client = await pool.connect()
+import  { TransactionManager } from '../../index.js'
+import { Root } from '../../src/root.js'
+import 'dotenv/config'
+import { SqliteDataDriver } from '../../src/data-drivers/sqlite-driver.js'
+
+const driver = new SqliteDataDriver( db )
 
 const r = new Root()
 
 // now do a simple command to insert a row into projects
 r.addCommand(
-  { sql: `INSERT INTO projects ( id, name, status ) VALUES ( $1, $2, $3 ) RETURNING *;`,
+  { sql: `INSERT INTO projects ( id, name, status ) VALUES ( ?, ?, ? ) RETURNING *;`,
     name: "insert-project-1",
     params : [ 'variables.id', 'variables.name1', 'variables.status'],
     expect: "rowCount=1"
@@ -27,21 +30,19 @@ r.addCommand(
 
 // attempt to insert a new project with the same ID as the previous one
 r.addCommand(
-  { sql: `INSERT INTO projects ( id, name, status ) VALUES ($1, $2, $3 ) RETURNING *;`,
+  { sql: `INSERT INTO projects ( id, name, status ) VALUES ( ?, ?, ? ) RETURNING *;`,
     name: "insert-project-2",
     strict: false,
-    params : [ 'lastDataResult.rows[0].id', 'variables.name', 'status'],
+    params : [ 'lastDataResult.rows[0].id', 'variables.name2', 'variables.status'],
     expect: "rowCount=1"
 })
 
-const t = new TransactionManager( client, r )
+const t = new TransactionManager( driver, r )
 
 // requesting the full context - usually only necessary for debugging
-const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" }, {output: 'full-context' } )
+const createProjectFailureResults = await t.executeTransaction( { id: 3, status: "stalled", name1 : "my private project", name2 : "my 2nd private project" }, { output: 'full-context'})
 
 console.log( '== 03.simple-insert-failure full context ===========================================')
 console.log( createProjectFailureResults )
 console.log( '===============================================================================')
 
-client.release()
-await pool.end()

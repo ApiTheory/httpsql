@@ -40,6 +40,16 @@ export class ParameterMappingErrors extends Error {
   }
 }
 
+export class DatabaseError extends Error {
+
+  constructor ( message ) {
+
+    super( message  )
+
+  }
+
+}
+
 export class ExpectationEvaluationError extends Error {
 
   constructor ( message, expectation ) {

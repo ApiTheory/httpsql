@@ -1,11 +1,13 @@
-import { getPool } from './utils.js'
-import  { TransactionManager } from '../index.js'
-import { Root } from '../src/root.js'
+import { getPool } from '../utils.js'
+import  { TransactionManager } from '../../index.js'
+import { Root } from '../../src/root.js'
 import 'dotenv/config'
+import { PgDataDriver } from '../../src/data-drivers/pg-driver.js'
 
 const pool = getPool()
 const client = await pool.connect()
 
+const driver = new PgDataDriver( client )
 
 const r = new Root( )
 r.addCommand(
@@ -49,7 +51,7 @@ r.addCommand(
 })
  
 
-const t = new TransactionManager( client, r )
+const t = new TransactionManager( driver, r )
 
 const updateResults = await t.executeTransaction( { 
   newId: 5,

@@ -22,7 +22,7 @@ class TransactionManager {
     
     if (this._transactionState === 'not-started') {
       this._transactionState = 'transact-begin-start'
-      await this._client.query( 'BEGIN' )
+      await this._client.beginTransaction()
       this._transactionState = 'transact-begin-complete'
     } else {
       throw new Error(`the transaction can not be started because its state = '${this._transactionState}'`)
@@ -35,7 +35,7 @@ class TransactionManager {
     if (["transact-begin-complete", "transact-execute-start"].includes(this._transactionState) ) {
 
       this._transactionState = 'transact-rollback-start'
-      await this._client.query( 'ROLLBACK' )
+      await this._client.rollbackTransaction()
       this._transactionState = 'transact-rollback-complete'
 
     } else {
@@ -51,7 +51,7 @@ class TransactionManager {
     if ( this._transactionState === 'transact-begin-complete' || this._transactionState === 'transact-execute-start' ) {
 
       this._transactionState = 'transact-commit-start'
-      await this._client.query( 'COMMIT' )
+      await this._client.commitTransaction()
       this._transactionState = 'transact-commit-complete'
 
     } else {
@@ -64,6 +64,8 @@ class TransactionManager {
   
   async executeTransaction ( variables = {}, opts = {} ) {
     
+   
+
     if ( this._transactionStarted ) {
       throw new Error( 'a transaction can only be started once - create a new object in order to execute a new transaction' )
     }
