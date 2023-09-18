@@ -44,5 +44,5 @@ const t = new TransactionManager( driver, r )
 const response = await t.executeTransaction( )
 
 console.log( '== 02.simple-insert results ===================================================')
-console.log( response )
+console.log( response.results[3].result )
 console.log( '===============================================================================')

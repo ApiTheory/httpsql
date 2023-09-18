@@ -75,6 +75,67 @@ In addition to throwing exceptions, onExpectationFailure can just equal 'stop.' 
 
 A nice feature of the HttpSql response is that every step taken within the transaction is documented by the response.  This can be saved for audit purposes and just general debugging.
 
+### Transform Example
+
+HttpSql also has the ability to transform final responses or the intra-transactional results thanks to the power of [JSONata](http://www.jsonata.org) .  Here multiple rows are decomposed into JSON.  
+
+``` JSON
+ { 
+  "commands" : [
+  { 
+    "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone ) VALUES ( ?, ?, ?, ? ) RETURNING *;",
+    "name": "insert-contact1",
+    "params" : [ "1", "\"Alex\"", "\"555-555-5555\"", "\"555-555-5555\"" ],
+    "expect" : "rowCount = 1",
+  },
+  { 
+    "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone, workphone, emergencyphone ) VALUES ( ?, ?, ?, ?, ?, ? ) RETURNING *;",
+    "name": "insert-contact2",
+    "params" : [ "2", "\"Betty\"", "\"555-555-4555\"", "\"555-555-4555\"", "\"555-555-4556\"", "\"555-555-4558\"" ],
+    "expect": "rowCount = 1",
+  },
+  { 
+    "sql" : "SELECT * FROM contacts;",
+  },
+  {
+    "logicOp" : "lastDataResult.rows.{ 
+      \"id\": id,
+      \"name\" : name,
+      \"phones\" : $sift(function($v, $k) {$k ~> /phone/})
+    }",
+  }
+
+]
+}
+```
+
+The result for the output rows would look like this:
+
+```JSON
+[
+  {
+    "id":1,
+    "name":"Alex",
+    "phones": {
+      "homephone":"555-555-5555",
+      "mobilephone":"555-555-5555",
+      "workphone":null,
+      "emergencyphone":null
+    }
+  },
+  {
+    "id":2,
+    "name":"Betty",
+    "phones": {
+      "homephone":"555-555-4555",
+      "mobilephone":"555-555-4555",
+      "workphone":"555-555-4556",
+      "emergencyphone":"555-555-4558"
+    }
+  }
+]
+```
+
 ## Learn More
 
 Visit the [HttpSql website](http://www.httpsql.com) to view complete documentation.  There is also an [HttpSql playground](https://www.httpsql/htpsql-playground) to test out your own requests.
