@@ -79,7 +79,7 @@ A nice feature of the HttpSql response is that every step taken within the trans
 
 HttpSql also has the ability to transform final responses or the intra-transactional results thanks to the power of [JSONata](http://www.jsonata.org) .  Here multiple rows are decomposed into JSON.  
 
-``` JSON
+``` json5
  { 
   "commands" : [
   { 
@@ -98,8 +98,8 @@ HttpSql also has the ability to transform final responses or the intra-transacti
     "sql" : "SELECT * FROM contacts;",
   },
   {
-    "logicOp" : "lastDataResult.rows.{ \n
-      \"id\": id,\n
+    "logicOp" : "lastDataResult.rows.{ \\n
+      \"id\": id,\\n
       \"name\" : name,\n
       \"phones\" : $sift(function($v, $k) {$k ~> /phone/})\n
     }",
