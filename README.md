@@ -26,10 +26,10 @@ Watch our releases to get notified of updates.
 
 Here is the simplest example of the format of an HTTPSql request:
 
-``` JSON
+```javascript
 [
   "sql" : "SELECT * FROM accounts WHERE name = $1",
-  "params" : [ "acme" ]
+  "params" : [ `"acme"` ]
 ]
 ```
 
@@ -37,23 +37,23 @@ Here is the simplest example of the format of an HTTPSql request:
 
 Here is something a bit more complex. The goal is to get a project by it's id, test that it exists and is in the correct state, then add a child task to the project.  
 
-``` JSON
+```javascript
  { 
   "commands" : [{ 
     "sql": "SELECT id, status, name FROM projects WHERE name = $1;",
     "strict" : true,
-    "params" : ["{projectName}"],
+    "params" : ["variables.projectName"],
     "expect" : "one",
     "onExpectationFailure" : "throw"
   },
   {
     "name" : "check-if-completed",
-    "description" : "only proceed if status is completed",
-    "logicOp": {"===" : ["complete", {"var" : "lastOp.rows.0.status"}]}
+    "description" : "only proceed if status is not completed",
+    "logicOp": {`lastOp.rows[0].status!="completed"`}
   },
   {
     "sql": "UPDATE projects SET name = $2, status = $3 WHERE id = $1 RETURNING *;",
-    "params" : ["{results.0.rows.0.id}", "{variables:updatedName}", "{updatedStatus}"],
+    "params" : ["lastDataResult.rows[0].id", "variables.updatedName", "variables.updatedStatus"],
     "expect" : "one"
   }],
   "variables" : {
@@ -79,26 +79,26 @@ A nice feature of the HttpSql response is that every step taken within the trans
 
 HttpSql also has the ability to transform final responses or the intra-transactional results thanks to the power of [JSONata](http://www.jsonata.org) .  Here multiple rows are decomposed into JSON.  
 
-```JSON
+```javascript
  { 
   "commands" : [
     { 
       "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone ) VALUES ( ?, ?, ?, ? ) RETURNING *;",
       "name": "insert-contact1",
-      "params" : [ "1", "\"Alex\"", "\"555-555-5555\"", "\"555-555-5555\"" ],
+      "params" : [ "1", `"Alex"`, `"555-555-5555"`, `"555-555-5555"` ],
       "expect" : "rowCount = 1",
     },
     { 
       "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone, workphone, emergencyphone ) VALUES ( ?, ?, ?, ?, ?, ? ) RETURNING *;",
       "name": "insert-contact2",
-      "params" : [ "2", "\"Betty\"", "\"555-555-4555\"", "\"555-555-4555\"", "\"555-555-4556\"", "\"555-555-4558\"" ],
+      "params" : [ "2", `"Betty"`, `"555-555-4555"`, `"555-555-4555"`, `"555-555-4556"`, `"555-555-4558"` ],
       "expect": "rowCount = 1",
     },
     { 
       "sql" : "SELECT * FROM contacts;",
     },
     {
-      "logicOp" : "lastDataResult.rows.{ \"id\": id, \"name\" : name, \"phones\" : $sift(function($v, $k) {$k ~> /phone/}) }",
+      "logicOp" : `lastDataResult.rows.{ "id": id, "name" : name, "phones" : $sift(function($v, $k) {$k ~> /phone/}) }`,
     }
   ]
 }
