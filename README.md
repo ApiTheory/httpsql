@@ -79,33 +79,28 @@ A nice feature of the HttpSql response is that every step taken within the trans
 
 HttpSql also has the ability to transform final responses or the intra-transactional results thanks to the power of [JSONata](http://www.jsonata.org) .  Here multiple rows are decomposed into JSON.  
 
-``` json5
+```JSON
  { 
   "commands" : [
-  { 
-    "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone ) VALUES ( ?, ?, ?, ? ) RETURNING *;",
-    "name": "insert-contact1",
-    "params" : [ "1", "\"Alex\"", "\"555-555-5555\"", "\"555-555-5555\"" ],
-    "expect" : "rowCount = 1",
-  },
-  { 
-    "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone, workphone, emergencyphone ) VALUES ( ?, ?, ?, ?, ?, ? ) RETURNING *;",
-    "name": "insert-contact2",
-    "params" : [ "2", "\"Betty\"", "\"555-555-4555\"", "\"555-555-4555\"", "\"555-555-4556\"", "\"555-555-4558\"" ],
-    "expect": "rowCount = 1",
-  },
-  { 
-    "sql" : "SELECT * FROM contacts;",
-  },
-  {
-    "logicOp" : "lastDataResult.rows.{ \\n
-      \"id\": id,\\n
-      \"name\" : name,\n
-      \"phones\" : $sift(function($v, $k) {$k ~> /phone/})\n
-    }",
-  }
-
-]
+    { 
+      "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone ) VALUES ( ?, ?, ?, ? ) RETURNING *;",
+      "name": "insert-contact1",
+      "params" : [ "1", "\"Alex\"", "\"555-555-5555\"", "\"555-555-5555\"" ],
+      "expect" : "rowCount = 1",
+    },
+    { 
+      "sql": "INSERT INTO contacts ( id, name, homephone, mobilephone, workphone, emergencyphone ) VALUES ( ?, ?, ?, ?, ?, ? ) RETURNING *;",
+      "name": "insert-contact2",
+      "params" : [ "2", "\"Betty\"", "\"555-555-4555\"", "\"555-555-4555\"", "\"555-555-4556\"", "\"555-555-4558\"" ],
+      "expect": "rowCount = 1",
+    },
+    { 
+      "sql" : "SELECT * FROM contacts;",
+    },
+    {
+      "logicOp" : "lastDataResult.rows.{ \"id\": id, \"name\" : name, \"phones\" : $sift(function($v, $k) {$k ~> /phone/}) }",
+    }
+  ]
 }
 ```
 
