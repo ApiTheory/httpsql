@@ -245,7 +245,7 @@ describe('SqlCommand', () => {
       const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id1'], strict: false } )
       
       const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
-      console.log( response )
+
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test where id = $1', [null] ])
       expect( response.finalizedParams[0]).equal(null)
@@ -357,7 +357,7 @@ describe('SqlCommand', () => {
       const c = new SqlCommand( { sql : 'SELECT * FROM test', expect: 'rowCount=5', onExpectationFailure: { message : 'just say something special', code: 't555', foo: 'bar' } } )
       
       const result = await c.execute( {}, { client:clientMock })
-      console.log(result)
+
       expect(result.rows).to.deep.equal([ { id: 1 } ] )
       expect(result.rowCount).to.equal( 1)
       expect(result.failureAction).to.equal('throw')

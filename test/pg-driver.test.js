@@ -1,6 +1,7 @@
 import { PgDataDriver } from '../src/data-drivers/pg-driver.js'
 import { expect } from 'chai'
 import sinon from 'sinon'
+import { DatabaseError } from '../src/errors.js'
 
 describe('PgDataDriver', () => {
 
@@ -135,6 +136,29 @@ describe('PgDataDriver', () => {
     expect(clientMockQuery.calledOnce).to.equal(true)
     expect(clientMockQuery.getCall(0).args.length).equal( 1 )
     expect(clientMockQuery.getCall(0).args[0]).deep.equal( queryConfig )
+
+  })
+
+  it('query generates error', async () => {
+    
+    const clientMock = {
+      id: 'testClient',
+      query: async (sql, params) => { return Promise.reject( new Error('error occured')) }
+    }
+  
+    const clientMockQuery = sinon.spy(clientMock, 'query' )
+    const client = new PgDataDriver( clientMock )
+    
+    let thrown = false
+    try {
+      await client.query( 'select 1=1' )
+    } catch ( err ) {
+      thrown = true
+      expect(err).instanceOf( DatabaseError )
+      expect(err.message).equal('error occured')
+    }
+    expect(thrown).to.equal(true)
+    expect(clientMockQuery.calledOnce).to.equal(true)
 
   })
   
