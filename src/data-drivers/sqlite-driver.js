@@ -55,25 +55,27 @@ export class SqliteDataDriver {
     return new Promise( (resolve, reject) => {
       
       let stmt
-
+ 
       try {
         stmt = this._db.prepare( command );
         const results = params ? stmt.all( params )  : stmt.all(  )  
         resolve( { rows: results, rowCount: results.length } )
+        return
       } catch ( err ) {
-        if ( !err instanceof TypeError || err.message.toLowerCase() === 'this statement does not return data. Use run() instead' ) {
+        if ( !err instanceof TypeError || !err.message.toLowerCase().includes('run() instead')  ) {
           reject( new DatabaseError( err.message ) )
+          return
         }
       }
 
       // dropped here because need to use run instead
       try {
         const results = params ? stmt.run( params )  : stmt.run(  )  
-        resolve( { rows: [], rowCount: 0 } )
+        resolve( { rows: [], rowCount: results.changes } )
       } catch ( err ) {
         reject( new DatabaseError( err.message ) )
       }
-
+ 
     })
 
   }
