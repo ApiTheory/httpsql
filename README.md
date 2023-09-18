@@ -98,10 +98,10 @@ HttpSql also has the ability to transform final responses or the intra-transacti
     "sql" : "SELECT * FROM contacts;",
   },
   {
-    "logicOp" : "lastDataResult.rows.{ 
-      \"id\": id,
-      \"name\" : name,
-      \"phones\" : $sift(function($v, $k) {$k ~> /phone/})
+    "logicOp" : "lastDataResult.rows.{ \n
+      \"id\": id,\n
+      \"name\" : name,\n
+      \"phones\" : $sift(function($v, $k) {$k ~> /phone/})\n
     }",
   }
 
