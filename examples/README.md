@@ -1,8 +1,9 @@
 # httpsql samples
 
-This folder has a number of examples that can help provide a feel for httpsql.
+This folder has a number of examples that can help provide a feel for httpsql.  There is a folder for both Postgres and Sqlite.  Each uses the same examples and
+shows how the same API calls can be sent to different databases.
 
-## Setup
+## Postgres Setup
 
 Each file expects the following environment variable to be set in order to connect to your postgres database:
 
@@ -10,18 +11,23 @@ Each file expects the following environment variable to be set in order to conne
 
 We suggest using a .env file in the root of the project to drive these values.  A .env.sample has been provided in the examples directory.
 
+## Sqlite Setup
+
+The examples create a foobar database.  Feel free to change the destination.
+
 ## Running Examples
 
 Each example can be executed directly via node:
 
-```
+``` bash
 node ./01.create-table.js
 ```
 
 Script commands have also been setup in the package so *npm run* can execute :
 
-```
-npm run sample1
+``` bash
+npm run pg-sample1
+npm run sqlite-sample1
 ```
 
 ## Files
