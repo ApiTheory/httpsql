@@ -17,7 +17,7 @@ The HttpSql project is a POC to expriment and understand the pros and cons of th
 ## Project Status
 
 - [x] Alpha: Anyone can use this project, but don't put it into production projects.
-- [ ] Beta: Stable enough for most non-enterprise use-cases
+- [x ] Beta: Stable enough for most non-enterprise use-cases
 - [ ] Public: General Availability
 
 Watch our releases to get notified of updates.
