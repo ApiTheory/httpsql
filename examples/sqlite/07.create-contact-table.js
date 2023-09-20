@@ -23,7 +23,7 @@ const commands = [
         mobilephone text,
         workphone text,
         emergencyphone text
-      );`,
+      ) STRICT;`,
     "name": "create-table",
     "params" : []
   }

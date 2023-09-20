@@ -26,7 +26,7 @@ const commands = [
         name text NOT NULL,
         description text ,
         status text NOT NULL DEFAULT 'active'
-      );`,
+      ) STRICT;`,
     "name": "create-table",
     "params" : []
   }
