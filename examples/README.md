@@ -15,6 +15,8 @@ We suggest using a .env file in the root of the project to drive these values.  
 
 The examples create a foobar database.  Feel free to change the destination.
 
+Please note that executing transactions in Sqlite has tradeoffs.  A write lock on the database is maintained throughout the life of the transaction.  If you start a transaction with 4-5 Httpsql commands, you should not run into problems snce the transaction should complete quickly.  However, if you have a very write intensive workload, consider carefully how many commands are sent through in a single transaction as you will likely run into write contentions and timeouts.  Keep track of the total execution time of each transaction as captured in the context response.
+
 ## Running Examples
 
 Each example can be executed directly via node:
