@@ -9,12 +9,14 @@ export class Root {
   
   constructor( commands = [], opts = {}) {
 
-    if ( arguments.length === 1 && isPlainObject( arguments[0] ) ) {
+    // try to fix if just opts is passed in
+    if ( arguments.length === 1 && isPlainObject( arguments[0] ) && !arguments[0].sql && !arguments[0].logicOp ) {
       opts = structuredClone( arguments[0] )
       commands = []
-    }
+    } 
     
-    if (!Array.isArray(commands) && isPlainObject( commands )) {
+    // if commands is not an array and is likely a command object, cast it into an array, otherwise if not an array, throw an error
+    if (!Array.isArray(commands) && isPlainObject( commands ) && ( arguments[0].sql || arguments[0].logicOp ) ) {
       commands = [ commands ]
     } else if (!Array.isArray(commands)) {
       throw new Error('the commands argument must be an array')
