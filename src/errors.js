@@ -42,10 +42,12 @@ export class ParameterMappingErrors extends Error {
 
 export class DatabaseError extends Error {
 
-  constructor ( message ) {
+  constructor ( message, cause ) {
 
     super( message  )
-
+    this.name = this.constructor.name
+    this.cause = cause
+    
   }
 
 }
