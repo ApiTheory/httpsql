@@ -180,7 +180,7 @@ export class Context {
     }
 
     if ( response.executionState !== 'success' ) {
-      response.errorMessage = this._results.toReversed().find( x =>  x.error  )?.error.message
+      response.error = this._results.toReversed().find( x =>  x.error  )
     }
 
     return response
