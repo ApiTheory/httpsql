@@ -113,29 +113,24 @@ export class Context {
 
       } catch ( err ) {
 
+        currentResult.failureAction = 'throw'
+        currentResult.error = err
+
         if ( err instanceof DatabaseError ) {
 
-          currentResult.failureAction = 'throw'
           currentResult.status = 'database-execution-failure'
-          currentResult.error = err
 
         } else if ( err instanceof ExpectationFailureError ) {
 
-          currentResult.failureAction = 'throw'
           currentResult.status = 'expectation-failure'
-          currentResult.error = err
 
         } else if ( err instanceof LogicOpFailureError ) {
 
-          currentResult.failureAction = 'throw'
           currentResult.status = 'logic-execution-failure'
-          currentResult.error = err
 
         } else {
 
-          currentResult.failureAction = 'throw'
           currentResult.status = 'unhandled-exception'
-          currentResult.error = err
 
         }
 
