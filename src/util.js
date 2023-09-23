@@ -38,4 +38,30 @@ export const arrayToObject = (array, keyField) =>
      return obj
    }, {})
 
+
+// code from the Dotty project  https://github.com/deoxxa/dotty/blob/master/lib/index.js
+export const parameterPathExists = (object, path) => {
+
+  if (typeof path === "string") {
+    path = path.split(".");
+  }
+
+  if (!(path instanceof Array) || path.length === 0) {
+    return false;
+  }
+
+  if (typeof object !== "object" || object === null) {
+    return false;
+  }
+
+  path = path.slice();
+
+  const key = path.shift();
+
+  if (path.length === 0) {
+    return Object.hasOwnProperty.apply(object, [key]);
+  } else {
+    return parameterPathExists(object[key], path);
+  }
+}
   

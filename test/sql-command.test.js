@@ -225,13 +225,54 @@ describe('SqlCommand', () => {
       const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id']} )
       
       const response = await c.execute( { variables : { id : 1 } }, { client: clientMock })
-
+      console.log(response)
       expect(clientMockQuery.calledOnce).to.equal(true)
       expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test where id = $1', [1] ])
       expect( response.finalizedParams[0]).equal(1)
 
     })
 
+    it('var exists but is undefined and strict = false then param should be null', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id'], strict: false } )
+      
+      const response = await c.execute( { variables : { id : undefined } }, { client: clientMock })
+
+      expect(clientMockQuery.calledOnce).to.equal(true)
+      expect(clientMockQuery.getCall(0).args).to.deep.equal([ 'SELECT * FROM test where id = $1', [null] ])
+      expect( response.finalizedParams[0]).equal(null)
+
+    })
+
+    it('var exists but is undefined and strict = true then should get param mapping error', async () => {
+      
+      const clientMock = {
+        id: 'testClient',
+        query: async ( sql, params ) => { return Promise.resolve( { rowCount : 1, rows: [ {id:1}] }) }
+      }
+    
+      const clientMockQuery = sinon.spy(clientMock, 'query' )
+    
+      const c = new SqlCommand( { sql : 'SELECT * FROM test where id = $1', params : [ 'variables.id'], strict: true } )
+      
+      const response = await c.execute( { variables : { id : undefined } }, { client: clientMock })
+
+      expect(clientMockQuery.calledOnce).to.equal(false)
+      expect( response.finalizedParams[0]).equal(undefined)
+      expect( response.status).equal('parameter-mapping-error')
+      expect( response.failureAction).equal('throw')
+      expect( response.error).instanceOf(ParameterMappingErrors)
+      expect( response.error.message).equal('dynamic parameters were malformed so they could not be mapped correctly and the command.strict value = true')
+
+
+    })
 
     it('var not found and strict = false', async () => {
       

@@ -4,7 +4,7 @@ import jsonata from 'jsonata'
 import { Command } from './command.js'
 import { CommandValidationError, ExpectationFailureError, ParameterMappingError, ParameterMappingErrors } from './errors.js'
 import { sqlCommandSchema } from './json-schemas/sql-command-schema.js';
-import { isString, isPlainObject } from './util.js'
+import { isString, isPlainObject, parameterPathExists } from './util.js'
 
 const ajv = new Ajv({ allErrors: true, strict: false })
 const sqlCommandValidator = ajv.compile( sqlCommandSchema )
@@ -66,17 +66,33 @@ export class SqlCommand extends Command {
 
       const param = this._params[x]
       let paramResult
+
       try {
 
-        const expression = jsonata( param )
-        paramResult = await expression.evaluate( contextSnapshot )
+        if ( !parameterPathExists( contextSnapshot, param )) {
+          
+          if ( this._strict ) {
 
-        // check strict rules
-        if ( paramResult === undefined && this._strict ) {
-          parameterErrors.push( { index: x, param, message: 'unable to map parameter to an existing value' })
-          paramResult = undefined
-        } else if ( paramResult === undefined && !this._strict ) {
-          paramResult = null
+            parameterErrors.push( { index: x, param, message: 'unable to map parameter to an existing value' })
+            paramResult = undefined
+
+          } else {
+
+            paramResult = null
+          }
+
+        } else {
+
+          const expression = jsonata( param )
+          paramResult = await expression.evaluate( contextSnapshot )
+
+          if ( paramResult === undefined && this._strict  ) {
+            parameterErrors.push( { index: x, param, message: 'unable to map parameter to an existing value' })
+            paramResult = undefined
+          } else  if ( paramResult === undefined && !this._strict  ) {
+            paramResult = null
+          } 
+
         }
 
       } catch ( err ) {
@@ -101,6 +117,7 @@ export class SqlCommand extends Command {
       }
     }
 
+    console.log(finalizedParams)
     const result = await opts.client.query( this._command, finalizedParams ) 
     const { rowCount, rows } = result
 
