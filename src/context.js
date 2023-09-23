@@ -175,7 +175,7 @@ export class Context {
     }
 
     if ( response.executionState !== 'success' ) {
-      response.error = this._results.toReversed().find( x =>  x.error  )
+      response.error = this._results.toReversed().find( x =>  x.error  )?.error
     }
 
     return response
