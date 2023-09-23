@@ -14,7 +14,9 @@ export class Root {
       commands = []
     }
     
-    if (!Array.isArray(commands)) {
+    if (!Array.isArray(commands) && isPlainObject( commands )) {
+      commands = [ commands ]
+    } else if (!Array.isArray(commands)) {
       throw new Error('the commands argument must be an array')
     }
     
