@@ -19,6 +19,9 @@ export class Context {
     this._transactionExecuted
     this._request
     this._requestIsPrepared = false
+    this._failureAction = undefined
+    this._failureIndex = undefined
+    this._failureCommandName = undefined
   }
 
   async executeRequest( vars, opts = {} ) {
@@ -46,6 +49,8 @@ export class Context {
 
     for ( let idx=0; idx < this._rootNode.commands.length; idx++ ) {
 
+      const startTs = process.hrtime.bigint()
+
       const currentExecution = { 
         currentResult : {
           index : idx,
@@ -66,13 +71,13 @@ export class Context {
 
       // if processing should stop, capture the result as not executed and move back to top of the loop to process everything else
       if ( stopProcessing ) {
+        currentResult.commandEnd = Date.now()
+        currentResult.totalExecutionMS = (( process.hrtime.bigint() - startTs )/ BigInt(1000000)).toString()
         this._results.push( currentResult )
         continue
       }
 
       const currentContextSnapshot = new ContextSnapshot( this )
-
-      const startTs = process.hrtime.bigint()
 
       try {
 
@@ -108,13 +113,21 @@ export class Context {
         if ( currentResult.status !== 'success' ) {
           stopProcessing = true
           this._executionState = currentResult.status
-          if ( failureAction ) currentResult.failureAction = failureAction
+          if ( failureAction ) {
+            this._failureAction = failureAction
+            this._failureIndex = idx
+            this._failureCommandName = currentCommand.name
+            currentResult.failureAction = failureAction
+          }
         }
 
       } catch ( err ) {
-
         currentResult.failureAction = 'throw'
         currentResult.error = err
+
+        this._failureAction = 'throw'
+        this._failureIndex = idx
+        this._failureCommandName = currentCommand.name
 
         if ( err instanceof DatabaseError ) {
 
@@ -161,6 +174,12 @@ export class Context {
       totalExecutionMS: (( process.hrtime.bigint() - overallStartTime )/ BigInt(1000000)).toString()
     }
 
+    if ( this._executionState !== 'success' ) {
+      response.failureAction = this._failureAction
+      response.failureIndex = this._failureIndex
+      response.failureCommandName = this._failureCommandName
+    }
+
     if ( opts.output === 'last-result') {
       response.lastResult = this._results[this._results.length - 1]
     } else if ( opts.output === 'last-data-result') {
@@ -204,6 +223,14 @@ export class Context {
 
   set executionState ( state ) {  
     this._executionState = state
+  }
+
+  get failureAction() {
+    return this._failureAction
+  }
+
+  get failureIndex() {
+    return this._failureIndex
   }
 
 }
